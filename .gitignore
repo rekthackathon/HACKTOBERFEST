@@ -13,3 +13,4 @@ supabase/.branches/
 Thumbs.db
 playwright-report/
 test-results/
+.env
