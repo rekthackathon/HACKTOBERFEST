@@ -16,7 +16,7 @@ export function SiteShell({ children, active = "Discover" }: { children: React.R
             </Link>
           ))}
         </nav>
-        <Link href="/auth" className="text-sm font-semibold text-teal-800 underline underline-offset-4 transition-all duration-150 hover:text-teal-950 hover:underline-offset-2">Account setup</Link>
+        <Link href="/auth" className="text-sm font-semibold text-teal-800 underline underline-offset-4 transition-all duration-150 hover:text-teal-950 hover:underline-offset-2">Account</Link>
       </div>
     </header>
     <main id="main-content" className="mx-auto max-w-6xl px-5 py-10 lg:px-8 lg:py-14">{children}</main>

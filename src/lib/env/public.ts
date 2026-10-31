@@ -5,12 +5,21 @@ const supabaseEnvironment = z.object({
   publishableKey: z.string().min(1),
 });
 
+// Public demo project defaults. Both values are browser-visible by design (the publishable key is
+// not a secret; RLS enforces access). Env vars override them. Never put a service-role key here.
+const DEFAULT_SUPABASE_URL = "https://cvxjlstnhanlgfcwpekq.supabase.co";
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_kcAqes42FsyNdV15_I8idw_hcuNi0ZU";
+
+function publicSupabaseValues() {
+  return {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL,
+    publishableKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+  };
+}
+
 /** Lazy validation keeps the public foundation usable before cloud provisioning. */
 export function getSupabaseEnvironment() {
-  const result = supabaseEnvironment.safeParse({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    publishableKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  });
+  const result = supabaseEnvironment.safeParse(publicSupabaseValues());
   if (!result.success) {
     throw new Error("Configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY before using Supabase.");
   }
@@ -18,5 +27,6 @@ export function getSupabaseEnvironment() {
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const { url, publishableKey } = publicSupabaseValues();
+  return Boolean(url && publishableKey);
 }
