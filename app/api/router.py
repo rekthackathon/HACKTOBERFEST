@@ -2,8 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import date, datetime
-from database import supabase
-from auth import verify_user
+from app.core.database import supabase
+from app.core.auth import verify_user
 
 app = FastAPI(title="ASEAN Startup Gateway Backend")
 
