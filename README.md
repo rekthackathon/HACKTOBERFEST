@@ -31,6 +31,7 @@ npm start
 
 ```text
 src/app/                 App Router pages and server Route Handlers
+backend/app/             Separate Python FastAPI backend (see backend_setup.md)
 src/components/          UI and shadcn-compatible primitives
 src/lib/contracts/       Zod schemas and inferred shared types
 src/lib/mocks/           Fictional development fixtures

@@ -9,7 +9,7 @@ The DevOps lead coordinates three specialists. Assign independent tasks in paral
 | Owner | Paths | Branch |
 | --- | --- | --- |
 | Frontend | src/app pages except api, src/components, public, styles | feature/frontend |
-| Backend | src/app/api except AI compilation, src/lib/supabase, src/lib/env, src/proxy.ts, supabase | feature/backend |
+| Backend | backend, src/app/api except AI compilation, src/lib/supabase, src/lib/env, src/proxy.ts, supabase | feature/backend |
 | AI | src/lib/ai, src/lib/eligibility, compilation route, associated tests | feature/ai-engine |
 | DevOps | root configuration, .github, .codex, shared contracts, mocks, docs | chore/devops-setup |
 
@@ -17,6 +17,7 @@ Tests follow module ownership. Contract changes require lead review before depen
 
 ## Integration rules
 
+- Keep Python code under backend/app. Never create a root app directory: it shadows the Next.js src/app frontend.
 - Inspect status and existing work first. Use feature branches and PRs against main.
 - Never force push, overwrite others, commit secrets, push directly to main, or deploy production without user approval.
 - Preserve API schemas in src/lib/contracts as the source of truth. Infer types from Zod.

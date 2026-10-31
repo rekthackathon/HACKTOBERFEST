@@ -1,10 +1,10 @@
 # FastAPI Backend Setup
 
-This backend is implemented using FastAPI and Supabase.
+This backend is implemented using FastAPI and Supabase. Its Python package lives in `backend/app/`, separate from the Next.js frontend in `src/app/`. Do not create a root-level `app/` folder: Next.js would ignore `src/app/` and the frontend would return 404.
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Create a `.env` file in the `backend/` directory with the following variables (never commit it):
 
 ```env
 SUPABASE_URL=your_supabase_project_url
@@ -24,14 +24,17 @@ pip install fastapi uvicorn supabase python-dotenv
 
 ## Running the Server
 
-Start the FastAPI server using uvicorn:
+From the repository root, start the FastAPI server using uvicorn:
 
 ```sh
-uvicorn main:app --reload
+cd backend
+uvicorn app.api.router:app --reload
 ```
 
 The server will be available at `http://127.0.0.1:8000`.
 The interactive API documentation (Swagger UI) is available at `http://127.0.0.1:8000/docs`.
+
+The existing `from app.core...` imports resolve from `backend/`. This command runs the Python service locally; the frontend Vercel deployment does not deploy this service automatically.
 
 ## Authentication
 

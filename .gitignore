@@ -14,3 +14,6 @@ Thumbs.db
 playwright-report/
 test-results/
 .env
+__pycache__/
+*.py[cod]
+.venv/
