@@ -109,6 +109,35 @@ describe("compilation verification", () => {
   });
 });
 
+describe("AI provider configuration", () => {
+  it("accepts a local Ollama server over HTTP without a key, and sends no Authorization header", async () => {
+    vi.stubEnv("AI_BASE_URL", "http://localhost:11434/v1");
+    vi.stubEnv("AI_API_KEY", "");
+    vi.stubEnv("AI_MODEL", "qwen3:test");
+    const { getAiConfig } = await import("@/lib/ai/config");
+    expect(getAiConfig()).toMatchObject({ baseUrl: "http://localhost:11434/v1", apiKey: "" });
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(new Headers(init?.headers).has("authorization")).toBe(false);
+      return Response.json({ choices: [{ message: { content: "{\"completeness\":\"complete\",\"requirements\":[],\"warnings\":[]}" } }] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const compilation = await compileOpportunity({ ...opportunity, id: "77777777-7777-4777-8777-777777777777" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(compilation.model).toBe("qwen3:test");
+  });
+
+  it("rejects plain HTTP to remote hosts and remote providers without a key", async () => {
+    const { getAiConfig } = await import("@/lib/ai/config");
+    vi.stubEnv("AI_MODEL", "m");
+    vi.stubEnv("AI_API_KEY", "k");
+    vi.stubEnv("AI_BASE_URL", "http://provider.example.com/v1");
+    expect(() => getAiConfig()).toThrow(/not configured/);
+    vi.stubEnv("AI_BASE_URL", "https://ollama.com/v1");
+    vi.stubEnv("AI_API_KEY", "");
+    expect(() => getAiConfig()).toThrow(/not configured/);
+  });
+});
+
 describe("provider failures", () => {
   it("reports missing AI configuration as NOT_CONFIGURED", async () => {
     vi.stubEnv("AI_BASE_URL", "");

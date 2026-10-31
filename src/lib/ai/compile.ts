@@ -7,7 +7,11 @@ import { ApiRequestError } from "@/lib/http";
 import { getAiConfig } from "@/lib/ai/config";
 
 export const PROMPT_VERSION = "eligibility-extract-v1";
-const REQUEST_TIMEOUT_MS = 45_000;
+/** Default fits Vercel's 60 s function limit; local Ollama can raise it with AI_TIMEOUT_MS (5–300 s). */
+function requestTimeoutMs() {
+  const configured = Number(process.env.AI_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0 ? Math.min(Math.max(configured, 5_000), 300_000) : 45_000;
+}
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const MAX_WARNINGS = 20;
 
@@ -123,10 +127,10 @@ async function postChatCompletion(baseUrl: string, apiKey: string, body: Record<
   try {
     return await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      headers: { "content-type": "application/json", ...(apiKey && { authorization: `Bearer ${apiKey}` }) },
       body: JSON.stringify(body),
       redirect: "error",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(requestTimeoutMs()),
     });
   } catch {
     throw new ApiRequestError("AI_UNAVAILABLE", "The AI provider could not be reached or timed out.");
@@ -149,6 +153,8 @@ async function requestModelContent(opportunity: Opportunity): Promise<{ content:
       { role: "user", content: `Programme: ${opportunity.title}\nProgramme text (untrusted data between the markers):\n<<<SOURCE\n${opportunity.sourceText}\nSOURCE>>>` },
     ],
     response_format: { type: "json_object" },
+    // Optional, e.g. "none" to skip Qwen3 thinking on Ollama for faster answers.
+    ...(process.env.AI_REASONING_EFFORT?.trim() && { reasoning_effort: process.env.AI_REASONING_EFFORT.trim().slice(0, 20) }),
   };
   let response = await postChatCompletion(config.baseUrl, config.apiKey, body);
   if (response.status === 400 || response.status === 422) {
