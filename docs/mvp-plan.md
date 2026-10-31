@@ -128,7 +128,8 @@ Expected demo outcomes with the seeded data. Make sure the AI owner sees these. 
    - user opportunity insert is denied
    
    It deletes its startup rows afterwards. The test users remain in Auth and can be deleted in the dashboard.
-3. Manual smoke on the live URL: register, log in, save the profile, hard reload and see the values, run eligibility on each seeded opportunity, sign out, and confirm `/api/startups/me` returns 401.
+3. API flow: `npm run build; npm start`, then `node --env-file=.env.local scripts/smoke-e2e.mjs http://localhost:3000`, or pass the live URL. It runs sign-up → profile 404 → save → reload → update, a cross-user 404, forged-owner rejection, anonymous 401s, and one Gemma eligibility check per opportunity, with timings. Add `--skip-ai` to skip the model calls.
+4. Manual smoke on the live URL: register, log in, save the profile, hard reload and see the values, run eligibility on each seeded opportunity, sign out, and confirm `/api/startups/me` returns 401.
 
 ## Demo video script (under 3 minutes)
 
