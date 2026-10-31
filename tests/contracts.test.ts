@@ -17,6 +17,24 @@ describe("shared contracts", () => {
     expect(startupProfileInputSchema.safeParse({ ...input, companySize: -1 }).success).toBe(false);
     expect(opportunitySchema.safeParse({ ...mockOpportunities[0], applicationUrl: "javascript:alert(1)" }).success).toBe(false);
   });
+  it("defaults new eligibility facts to unknown and validates their bounds", () => {
+    const { id, ownerId, createdAt, updatedAt, accumulatedRevenueMyr, malaysianOwnershipPercent, malaysianEmployeePercent, largestExternalEntityShareholdingPercent, ownsRequiredIpRights, applicationParticipantCount, hasAiProduct, hasFullTimeCofounders, hasDedicatedAiEngineers, ...legacyInput } = mockStartup;
+    void [id, ownerId, createdAt, updatedAt, accumulatedRevenueMyr, malaysianOwnershipPercent, malaysianEmployeePercent, largestExternalEntityShareholdingPercent, ownsRequiredIpRights, applicationParticipantCount, hasAiProduct, hasFullTimeCofounders, hasDedicatedAiEngineers];
+    expect(startupProfileInputSchema.parse(legacyInput)).toMatchObject({
+      accumulatedRevenueMyr: null,
+      malaysianOwnershipPercent: null,
+      malaysianEmployeePercent: null,
+      largestExternalEntityShareholdingPercent: null,
+      ownsRequiredIpRights: "unknown",
+      applicationParticipantCount: null,
+      hasAiProduct: "unknown",
+      hasFullTimeCofounders: "unknown",
+      hasDedicatedAiEngineers: "unknown",
+    });
+    expect(startupProfileInputSchema.safeParse({ ...legacyInput, accumulatedRevenueMyr: -1 }).success).toBe(false);
+    expect(startupProfileInputSchema.safeParse({ ...legacyInput, malaysianOwnershipPercent: 101 }).success).toBe(false);
+    expect(startupProfileInputSchema.safeParse({ ...legacyInput, applicationParticipantCount: 0 }).success).toBe(false);
+  });
   it("rejects executable or unsupported rule shapes and duplicate IDs", () => {
     expect(compiledRequirementsSchema.safeParse({ ...mockCompilation, requirements: [{ kind: "javascript", code: "return true" }] }).success).toBe(false);
     expect(compiledRequirementsSchema.safeParse({ ...mockCompilation, requirements: [mockCompilation.requirements[0], mockCompilation.requirements[0]] }).success).toBe(false);

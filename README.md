@@ -58,14 +58,15 @@ Use [the deployment runbook](docs/deployment.md). Vercel Git integration handles
 
 ## Open-weight AI qualification
 
-**Inference runs on Ollama** through its OpenAI-compatible `/v1/chat/completions` API. The model is whatever open-weight tag `AI_MODEL` names; record the exact tag, its upstream weights and license here before submission.
+**Primary evidence-backed inference runs through Ollama's `/api/chat` API.** The provider and model are selected entirely with server-only environment variables; record the exact model tag, upstream weights, and license before submission.
 
 | Mode | Server-only variables | Works on Vercel |
 | --- | --- | --- |
-| Local Ollama (for example a Qwen tag from `ollama list`) | `AI_BASE_URL=http://localhost:11434/v1`, `AI_MODEL=<tag>`, no key. Optional `AI_TIMEOUT_MS=180000` and `AI_REASONING_EFFORT=none` for faster Qwen3 answers | No; only when the app runs on the same machine |
-| Ollama Cloud | `AI_BASE_URL=https://ollama.com/v1`, `AI_MODEL=<tag from https://ollama.com/api/tags>`, `AI_API_KEY=<ollama.com key>` | Yes |
+| Local Ollama | `AI_PROVIDER=ollama`, optional `OLLAMA_BASE_URL` (defaults to `http://127.0.0.1:11434`) and `OLLAMA_MODEL` (defaults to `qwen3:8b`) | No; only when the app runs on the same machine |
+| Ollama Cloud | `AI_PROVIDER=ollama-cloud`, `OLLAMA_API_KEY=<ollama.com key>`, optional `OLLAMA_CLOUD_MODEL` (defaults to `gemma4:31b`) | Yes |
+| Google Gemma | `AI_PROVIDER=gemma`, HTTPS `AI_BASE_URL`, `AI_API_KEY`, and `AI_MODEL` | Yes |
 
-Plain HTTP is accepted only for loopback hosts; remote providers need HTTPS and a key. Extraction lives in `src/lib/ai/compile.ts` (prompt version `eligibility-extract-v1`), and every quote is verified against the stored source text.
+The Ollama Cloud endpoint is fixed to `https://ollama.com/api/chat`; its Bearer credential remains server-only. Plain HTTP is accepted only for local Ollama loopback hosts. Model output passes strict JSON/schema validation and every reported quote is verified against the stored source text.
 
 Select a specific published open-weight checkpoint whose model card/license permits the use, then record its weights URL, revision, license, inference provider, and provider model ID. Do not assume a hosted alias proves which weights run. An OpenAI-compatible API is an interface, not evidence that its model has published weights. The AI engineer must demonstrate actual source extraction through the selected model and include evidence-backed results and failure handling before submission. Model weights retain their own licenses; MIT covers this repository's original code.
 

@@ -36,6 +36,16 @@ function Result({ check }: { check: Extract<Check, { state: "done" }> }) {
         </li>;
       })}
     </ol>
+    {compilation.milestones.length > 0 && <section className="mt-4 rounded-md border border-sky-200 bg-sky-50 p-4">
+      <h3 className="text-sm font-bold text-sky-950">Post-funding milestones</h3>
+      <p className="mt-1 text-xs text-sky-900">These future deliverables are shown for planning and are not included in the current eligibility decision.</p>
+      <ul className="mt-3 space-y-3">
+        {compilation.milestones.map(milestone => <li key={milestone.id}>
+          <p className="text-sm font-semibold text-sky-950">{milestone.description}</p>
+          <blockquote className="mt-1 border-l-4 border-sky-300 pl-3 text-sm italic text-sky-900">&ldquo;{milestone.evidence.quote}&rdquo;</blockquote>
+        </li>)}
+      </ul>
+    </section>}
     {evaluation.warnings.length > 0 && <ul className="mt-4 space-y-1 border-l-4 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950">{evaluation.warnings.map(w => <li key={w}>{w}</li>)}</ul>}
     <p className="mt-4 text-xs text-slate-600">This is a screening aid, not an application decision. Confirm every requirement with the official programme source.</p>
   </div>;

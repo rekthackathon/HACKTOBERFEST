@@ -2,7 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAiConfig } from "@/lib/ai/config";
 import { createCompilationService, requestAiText } from "@/lib/ai/compilation";
 import { AiProviderError } from "@/lib/ai/gemma";
-import { buildOllamaUrl, requestOllamaText, type OllamaConfig } from "@/lib/ai/ollama";
+import {
+  buildOllamaCloudUrl,
+  buildOllamaUrl,
+  requestOllamaCloudText,
+  requestOllamaText,
+  type OllamaCloudConfig,
+  type OllamaConfig,
+} from "@/lib/ai/ollama";
 import { MemoryCache } from "@/lib/cache";
 import type { CompiledRequirements, Opportunity } from "@/lib/contracts";
 import { mockOpportunities } from "@/lib/mocks";
@@ -10,6 +17,12 @@ import { mockOpportunities } from "@/lib/mocks";
 vi.mock("server-only", () => ({}));
 
 const ollamaConfig: OllamaConfig = { provider: "ollama", baseUrl: "http://127.0.0.1:11434", model: "qwen3:8b" };
+const cloudConfig: OllamaCloudConfig = {
+  provider: "ollama-cloud",
+  baseUrl: "https://ollama.com",
+  apiKey: "cloud-test-secret",
+  model: "gemma4:31b",
+};
 const opportunity = mockOpportunities[0] as Opportunity;
 
 function modelBody(model = ollamaConfig.model): string {
@@ -31,6 +44,10 @@ function modelBody(model = ollamaConfig.model): string {
 
 function ollamaEnvelope(content: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
   return { model: ollamaConfig.model, message: { role: "assistant", content }, done: true, ...extra };
+}
+
+function cloudEnvelope(content: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return { model: cloudConfig.model, message: { role: "assistant", content }, done: true, ...extra };
 }
 
 afterEach(() => {
@@ -63,6 +80,19 @@ describe("AI provider configuration and selection", () => {
     expect(() => getAiConfig()).toThrow(/Gemma inference is not configured/);
   });
 
+  it("loads Ollama Cloud credentials server-side and defaults to gemma4:31b", () => {
+    vi.stubEnv("AI_PROVIDER", "ollama-cloud");
+    vi.stubEnv("OLLAMA_API_KEY", cloudConfig.apiKey);
+    vi.stubEnv("OLLAMA_CLOUD_MODEL", "");
+    expect(getAiConfig()).toEqual(cloudConfig);
+
+    vi.stubEnv("OLLAMA_CLOUD_MODEL", "custom-cloud-model");
+    expect(getAiConfig()).toMatchObject({ provider: "ollama-cloud", model: "custom-cloud-model" });
+
+    vi.stubEnv("OLLAMA_API_KEY", "");
+    expect(() => getAiConfig()).toThrow(/Ollama Cloud inference is not configured/);
+  });
+
   it("routes Ollama and Gemma configurations to their respective wire protocols", async () => {
     const fetchStub = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(ollamaEnvelope('{"ok":true}')), { status: 200 }))
@@ -74,6 +104,73 @@ describe("AI provider configuration and selection", () => {
 
     expect(String(fetchStub.mock.calls[0]?.[0])).toBe("http://127.0.0.1:11434/api/chat");
     expect(String(fetchStub.mock.calls[1]?.[0])).toContain("generativelanguage.googleapis.com/v1beta/models/gemma-test:generateContent");
+  });
+});
+
+describe("Ollama Cloud client", () => {
+  it("posts to the official endpoint with Bearer authentication and no credential in the URL or body", async () => {
+    const fetchStub = vi.fn().mockResolvedValue(new Response(JSON.stringify(cloudEnvelope(modelBody(cloudConfig.model))), { status: 200 }));
+    vi.stubGlobal("fetch", fetchStub);
+
+    await expect(requestAiText(cloudConfig, "CLOUD_PROMPT")).resolves.toBe(modelBody(cloudConfig.model));
+    expect(buildOllamaCloudUrl(cloudConfig.baseUrl)).toBe("https://ollama.com/api/chat");
+    const url = String(fetchStub.mock.calls[0]?.[0]);
+    const init = fetchStub.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(init.headers);
+    const body = String(init.body);
+    expect(url).toBe("https://ollama.com/api/chat");
+    expect(headers.get("authorization")).toBe(`Bearer ${cloudConfig.apiKey}`);
+    expect(body).toContain("CLOUD_PROMPT");
+    expect(body).not.toContain(cloudConfig.apiKey);
+    expect(url).not.toContain(cloudConfig.apiKey);
+    expect(JSON.parse(body)).toMatchObject({ model: "gemma4:31b", stream: false, format: "json", think: false });
+  });
+
+  it("returns safe authentication errors for rejected credentials", async () => {
+    const secretPayload = JSON.stringify({ error: `invalid token ${cloudConfig.apiKey}` });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(secretPayload, { status: 401 }))
+      .mockResolvedValueOnce(new Response(secretPayload, { status: 403 })));
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const error = await requestOllamaCloudText({ config: cloudConfig, prompt: "PROMPT" }).catch((caught: unknown) => caught);
+      expect(error).toMatchObject({ code: "AI_UNAVAILABLE", message: "Ollama Cloud authentication failed." });
+      expect((error as Error).message).not.toContain(cloudConfig.apiKey);
+    }
+  });
+
+  it("aborts cloud requests at the configured timeout", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+    })));
+    const pending = requestOllamaCloudText({ config: cloudConfig, prompt: "PROMPT", timeoutMs: 500 });
+    const assertion = expect(pending).rejects.toMatchObject({ code: "AI_UNAVAILABLE", message: "The Ollama Cloud request timed out." });
+    await vi.advanceTimersByTimeAsync(600);
+    await assertion;
+  });
+
+  it("rejects invalid JSON, malformed envelopes, and oversized responses", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response("not-json", { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ model: cloudConfig.model, done: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(cloudEnvelope("x".repeat(128))), { status: 200 })));
+
+    await expect(requestOllamaCloudText({ config: cloudConfig, prompt: "PROMPT" })).rejects.toMatchObject({ code: "AI_UNAVAILABLE" });
+    await expect(requestOllamaCloudText({ config: cloudConfig, prompt: "PROMPT" })).rejects.toMatchObject({ code: "AI_UNAVAILABLE" });
+    await expect(requestOllamaCloudText({ config: cloudConfig, prompt: "PROMPT", maxResponseBytes: 32 })).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "The Ollama Cloud response exceeds the allowed size.",
+    });
+  });
+
+  it("compiles a successful cloud response through strict schema and evidence validation", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(cloudEnvelope(modelBody(cloudConfig.model))), { status: 200 })));
+    const outcome = await createCompilationService({ config: () => cloudConfig, nowIso: () => "2026-10-31T00:00:00.000Z" }).compile(opportunity);
+    expect(outcome.status).toBe("compiled");
+    if (outcome.status !== "compiled") throw new Error("Expected cloud compilation success.");
+    expect(outcome.value).toMatchObject({ opportunityId: opportunity.id, model: cloudConfig.model });
+    expect(outcome.value.requirements[0]?.kind).toBe("country");
   });
 });
 
@@ -148,8 +245,10 @@ describe("Ollama compilation", () => {
   it("isolates cache entries by provider even when the model identifier is identical", async () => {
     const sharedCache = new MemoryCache<CompiledRequirements>({ ttlMs: 60_000, maxEntries: 10 });
     const gemmaSameModel = { provider: "gemma" as const, baseUrl: "https://generativelanguage.googleapis.com", apiKey: "key", model: ollamaConfig.model };
+    const cloudSameModel = { ...cloudConfig, model: ollamaConfig.model };
     let ollamaRequests = 0;
     let gemmaRequests = 0;
+    let cloudRequests = 0;
     const ollamaService = createCompilationService({
       config: () => ollamaConfig,
       cache: sharedCache,
@@ -160,11 +259,23 @@ describe("Ollama compilation", () => {
       cache: sharedCache,
       request: async () => { gemmaRequests += 1; return modelBody(); },
     });
+    const cloudService = createCompilationService({
+      config: () => cloudSameModel,
+      cache: sharedCache,
+      request: async () => { cloudRequests += 1; return modelBody(); },
+    });
 
     expect((await ollamaService.compile(opportunity)).status).toBe("compiled");
     expect((await gemmaService.compile(opportunity)).status).toBe("compiled");
+    expect((await cloudService.compile(opportunity)).status).toBe("compiled");
     expect((await ollamaService.compile(opportunity)).status).toBe("cache_hit");
     expect((await gemmaService.compile(opportunity)).status).toBe("cache_hit");
-    expect({ ollamaRequests, gemmaRequests, entries: sharedCache.size }).toEqual({ ollamaRequests: 1, gemmaRequests: 1, entries: 2 });
+    expect((await cloudService.compile(opportunity)).status).toBe("cache_hit");
+    expect({ ollamaRequests, gemmaRequests, cloudRequests, entries: sharedCache.size }).toEqual({
+      ollamaRequests: 1,
+      gemmaRequests: 1,
+      cloudRequests: 1,
+      entries: 3,
+    });
   });
 });

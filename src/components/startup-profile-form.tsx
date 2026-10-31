@@ -8,12 +8,67 @@ const display = "font-[family-name:var(--font-display)]";
 const field = "min-h-11 w-full rounded-md border border-slate-400 bg-white px-3 text-base transition-colors duration-150 hover:border-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700";
 const sectorOptions = ["Agritech", "Fintech", "Healthtech", "Edtech", "Logistics", "Climate", "E-commerce", "AI and data", "Other"];
 /** Form state is all strings; it is converted to the contract (codes, numbers, nulls) on save. */
-type FormState = { name: string; description: string; industry: string; country: string; stage: string; fundingStage: string; companySize: string; incorporationDate: string };
-const empty: FormState = { name: "", description: "", industry: "", country: "", stage: "", fundingStage: "", companySize: "", incorporationDate: "" };
+type FormState = {
+  name: string;
+  description: string;
+  industry: string;
+  country: string;
+  stage: string;
+  fundingStage: string;
+  companySize: string;
+  incorporationDate: string;
+  accumulatedRevenueMyr: string;
+  malaysianOwnershipPercent: string;
+  malaysianEmployeePercent: string;
+  largestExternalEntityShareholdingPercent: string;
+  ownsRequiredIpRights: "yes" | "no" | "unknown";
+  applicationParticipantCount: string;
+  hasAiProduct: "yes" | "no" | "unknown";
+  hasFullTimeCofounders: "yes" | "no" | "unknown";
+  hasDedicatedAiEngineers: "yes" | "no" | "unknown";
+};
+const empty: FormState = {
+  name: "",
+  description: "",
+  industry: "",
+  country: "",
+  stage: "",
+  fundingStage: "",
+  companySize: "",
+  incorporationDate: "",
+  accumulatedRevenueMyr: "",
+  malaysianOwnershipPercent: "",
+  malaysianEmployeePercent: "",
+  largestExternalEntityShareholdingPercent: "",
+  ownsRequiredIpRights: "unknown",
+  applicationParticipantCount: "",
+  hasAiProduct: "unknown",
+  hasFullTimeCofounders: "unknown",
+  hasDedicatedAiEngineers: "unknown",
+};
 type Status = "loading" | "ready" | "signed-out" | "unavailable";
 function fromProfile(p: StartupProfile): FormState {
-  return { name: p.name, description: p.description, industry: p.industry, country: p.country, stage: p.stage, fundingStage: p.fundingStage ?? "", companySize: p.companySize === null ? "" : String(p.companySize), incorporationDate: p.incorporationDate ?? "" };
+  return {
+    name: p.name,
+    description: p.description,
+    industry: p.industry,
+    country: p.country,
+    stage: p.stage,
+    fundingStage: p.fundingStage ?? "",
+    companySize: p.companySize === null ? "" : String(p.companySize),
+    incorporationDate: p.incorporationDate ?? "",
+    accumulatedRevenueMyr: p.accumulatedRevenueMyr == null ? "" : String(p.accumulatedRevenueMyr),
+    malaysianOwnershipPercent: p.malaysianOwnershipPercent == null ? "" : String(p.malaysianOwnershipPercent),
+    malaysianEmployeePercent: p.malaysianEmployeePercent == null ? "" : String(p.malaysianEmployeePercent),
+    largestExternalEntityShareholdingPercent: p.largestExternalEntityShareholdingPercent == null ? "" : String(p.largestExternalEntityShareholdingPercent),
+    ownsRequiredIpRights: p.ownsRequiredIpRights ?? "unknown",
+    applicationParticipantCount: p.applicationParticipantCount == null ? "" : String(p.applicationParticipantCount),
+    hasAiProduct: p.hasAiProduct ?? "unknown",
+    hasFullTimeCofounders: p.hasFullTimeCofounders ?? "unknown",
+    hasDedicatedAiEngineers: p.hasDedicatedAiEngineers ?? "unknown",
+  };
 }
+const optionalNumber = (value: string) => value.trim() === "" ? null : Number(value);
 function toInput(f: FormState) {
   return startupProfileInputSchema.safeParse({
     name: f.name.trim(),
@@ -25,6 +80,15 @@ function toInput(f: FormState) {
     fundingStage: f.fundingStage || null,
     companySize: f.companySize.trim() === "" ? null : Number(f.companySize),
     incorporationDate: f.incorporationDate || null,
+    accumulatedRevenueMyr: optionalNumber(f.accumulatedRevenueMyr),
+    malaysianOwnershipPercent: optionalNumber(f.malaysianOwnershipPercent),
+    malaysianEmployeePercent: optionalNumber(f.malaysianEmployeePercent),
+    largestExternalEntityShareholdingPercent: optionalNumber(f.largestExternalEntityShareholdingPercent),
+    ownsRequiredIpRights: f.ownsRequiredIpRights,
+    applicationParticipantCount: optionalNumber(f.applicationParticipantCount),
+    hasAiProduct: f.hasAiProduct,
+    hasFullTimeCofounders: f.hasFullTimeCofounders,
+    hasDedicatedAiEngineers: f.hasDedicatedAiEngineers,
   } satisfies Record<keyof StartupProfileInput, unknown>);
 }
 function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
@@ -119,6 +183,28 @@ export function StartupProfileForm() {
           </div>
         </div>
       </Section>
+      <Section title="Product and team" hint="Optional structured facts used only when a programme states these requirements.">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label htmlFor="ai-product" className="mb-1.5 block text-sm font-semibold">Has an AI product</label>
+            <select id="ai-product" value={p.hasAiProduct} onChange={e => set("hasAiProduct", e.target.value as FormState["hasAiProduct"])} className={field}>
+              <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="full-time-cofounders" className="mb-1.5 block text-sm font-semibold">Has full-time cofounders</label>
+            <select id="full-time-cofounders" value={p.hasFullTimeCofounders} onChange={e => set("hasFullTimeCofounders", e.target.value as FormState["hasFullTimeCofounders"])} className={field}>
+              <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ai-engineers" className="mb-1.5 block text-sm font-semibold">Has dedicated AI engineers</label>
+            <select id="ai-engineers" value={p.hasDedicatedAiEngineers} onChange={e => set("hasDedicatedAiEngineers", e.target.value as FormState["hasDedicatedAiEngineers"])} className={field}>
+              <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+            </select>
+          </div>
+        </div>
+      </Section>
       <Section title="Company" hint="Optional. Leave blank if unknown; checks then mark the rule for review.">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
@@ -128,6 +214,36 @@ export function StartupProfileForm() {
           <div>
             <label htmlFor="incorporated" className="mb-1.5 block text-sm font-semibold">Incorporation date</label>
             <input id="incorporated" type="date" value={p.incorporationDate} onChange={e => set("incorporationDate", e.target.value)} className={field} />
+          </div>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label htmlFor="revenue" className="mb-1.5 block text-sm font-semibold">Accumulated revenue (MYR)</label>
+            <input id="revenue" type="number" inputMode="decimal" min={0} step="0.01" value={p.accumulatedRevenueMyr} onChange={e => set("accumulatedRevenueMyr", e.target.value)} className={field} />
+          </div>
+          <div>
+            <label htmlFor="participants" className="mb-1.5 block text-sm font-semibold">Application participants</label>
+            <input id="participants" type="number" inputMode="numeric" min={1} step={1} value={p.applicationParticipantCount} onChange={e => set("applicationParticipantCount", e.target.value)} className={field} />
+          </div>
+          <div>
+            <label htmlFor="malaysian-ownership" className="mb-1.5 block text-sm font-semibold">Malaysian ownership (%)</label>
+            <input id="malaysian-ownership" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.malaysianOwnershipPercent} onChange={e => set("malaysianOwnershipPercent", e.target.value)} className={field} />
+          </div>
+          <div>
+            <label htmlFor="malaysian-employees" className="mb-1.5 block text-sm font-semibold">Malaysian employees (%)</label>
+            <input id="malaysian-employees" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.malaysianEmployeePercent} onChange={e => set("malaysianEmployeePercent", e.target.value)} className={field} />
+          </div>
+          <div>
+            <label htmlFor="external-shareholding" className="mb-1.5 block text-sm font-semibold">Largest external entity shareholding (%)</label>
+            <input id="external-shareholding" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.largestExternalEntityShareholdingPercent} onChange={e => set("largestExternalEntityShareholdingPercent", e.target.value)} className={field} />
+          </div>
+          <div>
+            <label htmlFor="ip-rights" className="mb-1.5 block text-sm font-semibold">Owns required IP rights</label>
+            <select id="ip-rights" value={p.ownsRequiredIpRights} onChange={e => set("ownsRequiredIpRights", e.target.value as FormState["ownsRequiredIpRights"])} className={field}>
+              <option value="unknown">Not sure</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
           </div>
         </div>
       </Section>

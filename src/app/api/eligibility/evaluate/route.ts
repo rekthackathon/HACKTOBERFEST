@@ -3,7 +3,7 @@ import { getCompilationRateLimiter, getCompilationService } from "@/lib/ai/compi
 import { evaluateEligibility } from "@/lib/eligibility";
 import { isSupabaseConfigured } from "@/lib/env/public";
 import { ApiRequestError, apiErrorResponse, readJsonBody, toErrorResponse } from "@/lib/http";
-import { OPPORTUNITY_COLUMNS, STARTUP_COLUMNS, toOpportunity, toStartupProfile, type OpportunityRow, type StartupRow } from "@/lib/supabase/mappers";
+import { isMissingStartupEligibilityColumnError, LEGACY_STARTUP_COLUMNS, OPPORTUNITY_COLUMNS, STARTUP_COLUMNS, toOpportunity, toStartupProfile, type OpportunityRow, type StartupRow } from "@/lib/supabase/mappers";
 import { getAuthContext } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +29,14 @@ export async function POST(request: Request) {
       return response;
     }
 
-    const [startupResult, opportunityResult] = await Promise.all([
+    const [initialStartupResult, opportunityResult] = await Promise.all([
       supabase.from("startups").select(STARTUP_COLUMNS).eq("owner_id", user.id).maybeSingle(),
       supabase.from("opportunities").select(OPPORTUNITY_COLUMNS).eq("id", opportunityId).maybeSingle(),
     ]);
+    let startupResult = initialStartupResult;
+    if (isMissingStartupEligibilityColumnError(startupResult.error)) {
+      startupResult = await supabase.from("startups").select(LEGACY_STARTUP_COLUMNS).eq("owner_id", user.id).maybeSingle();
+    }
     if (startupResult.error || opportunityResult.error) throw new ApiRequestError("INTERNAL_ERROR", "Eligibility data could not be loaded.");
     if (!startupResult.data) return apiErrorResponse("NOT_FOUND", "Save your startup profile before checking eligibility.");
     if (!opportunityResult.data) return apiErrorResponse("NOT_FOUND", "Opportunity not found.");
@@ -48,7 +52,7 @@ export async function POST(request: Request) {
       return response;
     }
     const compilation = compilationOutcome.value;
-    const evaluation = evaluateEligibility(startup, compilation);
+    const evaluation = evaluateEligibility(startup, compilation, { evaluationDate: new Date().toISOString().slice(0, 10) });
     return Response.json({ data: { evaluation, compilation } }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
     return toErrorResponse(error);
