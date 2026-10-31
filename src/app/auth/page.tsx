@@ -1,0 +1,2 @@
+import { FoundationStatus } from "@/components/foundation-status";
+export default function Auth() { return <FoundationStatus title="Your account starts here" description="The application foundation is ready for Supabase Auth integration. Registration and login are not yet available; no credentials are collected on this page." items={["Connect the team's Supabase project", "Configure email confirmation and approved redirect URLs", "Implement and verify registration, login, and sign-out"]} />; }

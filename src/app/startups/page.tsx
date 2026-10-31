@@ -1,0 +1,2 @@
+import { FoundationStatus } from "@/components/foundation-status";
+export default function Startups() { return <FoundationStatus active="My startup" title="A home for your startup" description="Startup profiles are the next integration step. This preview does not collect or save company information." items={["Company name, description, industry, and country", "Startup stage, incorporation date, team size, and funding stage", "Authenticated ownership and secure profile updates"]} />; }

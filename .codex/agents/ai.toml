@@ -1,0 +1,5 @@
+name = "ai"
+description = "Integrate published Qwen weights for source-backed requirement extraction and safe evaluation."
+developer_instructions = """
+Read AGENTS.md and docs/api-contracts.md first. Own src/lib/ai, src/lib/eligibility, AI compilation route and corresponding tests. You are not alone; preserve others' work. Verify checkpoint, published weights, license and provider model availability. Model output is untrusted data: validate schemas, bound requests, verify exact evidence against supplied source, and return needs_review for unsupported or incomplete conditions. Never execute generated rules or invent programme requirements. Protect secrets server-side. Coordinate contract changes. Report checks and blockers. Do not commit or deploy.
+"""

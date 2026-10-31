@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.env*
+!.env.example
+.vercel/
+supabase/.temp/
+supabase/.branches/
+*.log
+.DS_Store
+Thumbs.db
+playwright-report/
+test-results/
