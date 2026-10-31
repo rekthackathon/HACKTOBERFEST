@@ -1,7 +1,14 @@
 import "server-only";
 
 import { type ApiErrorCode } from "@/lib/http";
-import { compiledRequirementsSchema, type CompiledRequirements, type Opportunity, type SourceEvidence } from "@/lib/contracts";
+import {
+  compiledRequirementsSchema,
+  type CompiledRequirements,
+  type EligibilityRequirement,
+  type Opportunity,
+  type PostFundingMilestone,
+  type SourceEvidence,
+} from "@/lib/contracts";
 import { compilationCacheKey, MemoryCache } from "@/lib/cache";
 import { getAiConfig, type AiConfig } from "@/lib/ai/config";
 import {
@@ -11,7 +18,7 @@ import {
   parseModelJson,
   requestGemmaText,
 } from "@/lib/ai/gemma";
-import { requestOllamaText } from "@/lib/ai/ollama";
+import { requestOllamaCloudText, requestOllamaText } from "@/lib/ai/ollama";
 
 /**
  * Orchestrates provider-independent eligibility compilation:
@@ -101,17 +108,16 @@ function normalizeWhitespace(value: string): string {
 }
 
 function quoteOccursInText(quote: string, text: string): boolean {
-  const normalizedQuote = normalizeWhitespace(quote);
-  return normalizedQuote.length > 0 && normalizeWhitespace(text).includes(normalizedQuote);
+  return quote.trim().length > 0 && text.includes(quote);
 }
 
-type EvidenceVerdict = { verified: true; evidence: SourceEvidence } | { verified: false; record: SourceEvidence };
+type EvidenceVerdict = { verified: true; evidence: SourceEvidence } | { verified: false };
 
 /**
  * Verifies that a model-supplied evidence record is grounded in the trusted
  * opportunity. It is verified only when it exactly matches a trusted record,
  * or when its source URL and retrieval timestamp match a trusted record and
- * its quote occurs verbatim (ignoring whitespace differences) in the trusted
+ * its quote occurs verbatim in the trusted
  * source text. No evidence facts are ever invented by the verifier.
  *
  * Scope: this establishes source provenance — that the quoted condition exists
@@ -129,48 +135,138 @@ function verifyEvidence(evidence: SourceEvidence, opportunity: Opportunity): Evi
     && record.locator === evidence.locator
     && record.retrievedAt === evidence.retrievedAt);
   if (exact) return { verified: true, evidence };
-  const referenced = trusted.find((record) => record.sourceUrl === evidence.sourceUrl);
-  if (referenced && evidence.retrievedAt === referenced.retrievedAt && quoteOccursInText(evidence.quote, opportunity.sourceText)) {
+  const referencesSnapshot = trusted.some((record) => record.sourceUrl === evidence.sourceUrl && record.retrievedAt === evidence.retrievedAt);
+  if (referencesSnapshot && quoteOccursInText(evidence.quote, opportunity.sourceText)) {
     return { verified: true, evidence };
   }
-  return { verified: false, record: referenced ?? trusted[0] };
+  return { verified: false };
 }
 
-const UNVERIFIED_EVIDENCE_REASON = "A model-reported condition could not be verified against the trusted programme source.";
-const UNVERIFIED_EVIDENCE_WARNING = "One or more requirements were marked unsupported because the model's evidence could not be verified against the trusted source.";
+const COUNTRY_TERMS: Record<string, string[]> = {
+  BN: ["brunei"], KH: ["cambodia", "cambodian"], ID: ["indonesia", "indonesian"],
+  LA: ["laos", "lao"], MY: ["malaysia", "malaysian"], MM: ["myanmar", "burmese"],
+  PH: ["philippines", "philippine", "filipino"], SG: ["singapore", "singaporean"],
+  TH: ["thailand", "thai"], TL: ["timor-leste", "timor leste"], VN: ["vietnam", "vietnamese"],
+};
+const STOP_WORDS = new Set(["the", "and", "for", "with", "must", "shall", "have", "from", "that", "this", "company", "startup", "applicant", "application", "requirement"]);
+
+function quoteHasNumber(quote: string, value: number): boolean {
+  const normalized = quote.toLowerCase().replace(/,/g, "");
+  if (normalized.includes(String(value))) return true;
+  if (Number.isInteger(value / 1_000_000) && normalized.includes(`${value / 1_000_000} million`)) return true;
+  if (Number.isInteger(value / 1_000) && normalized.includes(`${value / 1_000} thousand`)) return true;
+  return false;
+}
+
+function hasMeaningfulOverlap(text: string, quote: string): boolean {
+  const tokens = text.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length >= 3 && !STOP_WORDS.has(token)) ?? [];
+  const quoteTokens = new Set(quote.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+  const unique = [...new Set(tokens)];
+  return unique.length > 0 && unique.filter((token) => quoteTokens.has(token)).length >= Math.min(2, unique.length);
+}
+
+/** Conservative rule-specific semantic check; uncertain pairings are discarded for review. */
+function evidenceSupportsRequirement(requirement: EligibilityRequirement, quote: string): boolean {
+  const text = normalizeWhitespace(quote).toLowerCase();
+  switch (requirement.kind) {
+    case "country": return /(based|incorporat|register|headquarter|establish|located|company in|startup in)/.test(text)
+      && (requirement.allowed.every((country) => COUNTRY_TERMS[country].some((term) => text.includes(term)))
+        || (requirement.allowed.length === 11 && text.includes("southeast asia")));
+    case "stage": return requirement.allowed.every((stage) => text.includes(stage)) && /(stage|prototype|mvp|product|startup)/.test(text);
+    case "funding_stage": {
+      const seedToSeriesB = requirement.allowed.length === 3
+        && requirement.allowed.includes("seed")
+        && requirement.allowed.includes("series_a")
+        && requirement.allowed.includes("series_b")
+        && /seed\s*(?:to|through|-)\s*series\s*b/.test(text);
+      return (seedToSeriesB || requirement.allowed.every((stage) => text.includes(stage.replaceAll("_", " "))))
+        && /(funding|funded|investment|seed|series|bootstrapped)/.test(text);
+    }
+    case "company_size_max": return /(employee|staff|team|workforce)/.test(text) && quoteHasNumber(text, requirement.maximum);
+    case "incorporated_on_or_after": return /(incorporat|register|establish)/.test(text) && text.includes(requirement.date.slice(0, 4));
+    case "company_age_max": return /(year|age|old|incorporat)/.test(text) && quoteHasNumber(text, requirement.maximumYears);
+    case "accumulated_revenue_max": return /(revenue|sales|turnover)/.test(text) && quoteHasNumber(text, requirement.maximumMyr);
+    case "malaysian_ownership_min": return /malaysian/.test(text) && /(own|sharehold|equity)/.test(text) && quoteHasNumber(text, requirement.minimumPercent);
+    case "malaysian_employees_min": return /malaysian/.test(text) && /(employee|staff|workforce)/.test(text) && quoteHasNumber(text, requirement.minimumPercent);
+    case "malaysian_ownership_or_employees": return /malaysian/.test(text)
+      && /(own|sharehold|equity)/.test(text)
+      && /(employee|staff|workforce)/.test(text)
+      && /(\bor\b|if .*own|less than .*own|otherwise)/.test(text)
+      && quoteHasNumber(text, requirement.ownershipMinimumPercent)
+      && quoteHasNumber(text, requirement.employeeMinimumPercent);
+    case "external_entity_shareholding_max": return /(external|other company|entity|corporate)/.test(text)
+      && /(own|sharehold|equity|stake)/.test(text)
+      && quoteHasNumber(text, requirement.maximumPercent);
+    case "ip_rights_required": return /(intellectual property|\bip\b)/.test(text) && /(own|right|license)/.test(text);
+    case "application_team_size_min": return /(individual|participant|team member|person|people)/.test(text) && quoteHasNumber(text, requirement.minimum);
+    case "ai_product_required": return /(\bai\b|artificial intelligence)/.test(text) && /(product|solution|platform|technology)/.test(text);
+    case "full_time_cofounders_required": return /full[- ]time/.test(text) && /co[- ]?founder/.test(text);
+    case "dedicated_ai_engineers_required": return /dedicated/.test(text)
+      && /(\bai\b|artificial intelligence)/.test(text)
+      && /engineer/.test(text);
+    case "unsupported": return hasMeaningfulOverlap(`${requirement.description} ${requirement.reason}`, text);
+  }
+}
+
+function isApplicationTimelineLanguage(quote: string): boolean {
+  const text = normalizeWhitespace(quote).toLowerCase();
+  return /(applications? (?:open|close)|application deadline|submission deadline|deadline (?:is|on)|interview (?:date|schedule)|(?:will be |are )?notif(?:y|ied|ication)|results? announced|shortlisted .*(?:by|on))/i.test(text);
+}
+
+function isPostFundingLanguage(quote: string): boolean {
+  const text = normalizeWhitespace(quote).toLowerCase();
+  return /(by the end|during (the )?(funding|programme|program)|after (funding|award)|within .*(month|year)|upon completion)/.test(text);
+}
+
+function evidenceSupportsMilestone(milestone: PostFundingMilestone, quote: string): boolean {
+  const text = normalizeWhitespace(quote).toLowerCase();
+  return isPostFundingLanguage(text)
+    && hasMeaningfulOverlap(milestone.description, text);
+}
+
+const MISMATCHED_EVIDENCE_WARNING = "One or more extracted conditions were discarded because their evidence was missing, untrusted, or not semantically relevant to the reported condition.";
 
 /**
- * Rewrites unverified evidence: supported rules become `unsupported` with a
- * trusted evidence record, and unsupported rules keep their kind and reason
- * but attach a trusted record. Any rewrite marks the compilation partial and
- * records a warning so uncertain extraction never reads as verified.
+ * Discards ungrounded or semantically mismatched conditions. It never invents
+ * replacement evidence and never displays an invalid condition as a programme
+ * rule. Any discard marks the compilation partial and leaves an audit warning.
  */
 function groundCompilation(parsed: CompiledRequirements, opportunity: Opportunity, compiledAt: string): CompiledRequirements {
-  const requirements = parsed.requirements.map((requirement) => {
+  let discarded = 0;
+  const reclassifiedMilestones: PostFundingMilestone[] = [];
+  const requirements = parsed.requirements.filter((requirement) => {
     const verdict = verifyEvidence(requirement.evidence, opportunity);
-    if (verdict.verified) return requirement;
-    if (requirement.kind === "unsupported") {
-      return { ...requirement, evidence: verdict.record };
+    if (verdict.verified && isApplicationTimelineLanguage(verdict.evidence.quote)) return false;
+    if (verdict.verified && isPostFundingLanguage(verdict.evidence.quote)) {
+      reclassifiedMilestones.push({
+        id: requirement.id,
+        kind: "post_funding_milestone",
+        description: requirement.description,
+        evidence: requirement.evidence,
+      });
+      return false;
     }
-    return {
-      id: requirement.id,
-      kind: "unsupported" as const,
-      description: requirement.description,
-      reason: UNVERIFIED_EVIDENCE_REASON,
-      evidence: verdict.record,
-    };
+    const keep = verdict.verified && evidenceSupportsRequirement(requirement, verdict.evidence.quote);
+    if (!keep) discarded += 1;
+    return keep;
   });
-  const downgraded = requirements.some((requirement, index) => requirement !== parsed.requirements[index]);
-  const warnings = [...parsed.warnings, ...(downgraded ? [UNVERIFIED_EVIDENCE_WARNING] : [])].slice(0, 100);
-  const completeness = downgraded ? "partial" : parsed.completeness;
-  return { ...parsed, compiledAt, completeness, requirements, warnings };
+  const milestones = [...parsed.milestones.filter((milestone) => {
+    const verdict = verifyEvidence(milestone.evidence, opportunity);
+    if (verdict.verified && isApplicationTimelineLanguage(verdict.evidence.quote)) return false;
+    const keep = verdict.verified && evidenceSupportsMilestone(milestone, verdict.evidence.quote);
+    if (!keep) discarded += 1;
+    return keep;
+  }), ...reclassifiedMilestones];
+  const warnings = [...parsed.warnings, ...(discarded > 0 ? [MISMATCHED_EVIDENCE_WARNING] : [])].slice(0, 100);
+  const completeness = discarded > 0 ? "partial" : parsed.completeness;
+  return { ...parsed, compiledAt, completeness, requirements, milestones, warnings };
 }
 
 /** Selects exactly one server-only client from the validated provider configuration. */
 export function requestAiText(config: AiConfig, prompt: string): Promise<string> {
-  return config.provider === "ollama"
-    ? requestOllamaText({ config, prompt })
-    : requestGemmaText({ config, prompt });
+  if (config.provider === "ollama") return requestOllamaText({ config, prompt });
+  if (config.provider === "ollama-cloud") return requestOllamaCloudText({ config, prompt });
+  return requestGemmaText({ config, prompt });
 }
 
 function createCompilationDeps(overrides: Partial<CompilationServiceDeps> = {}): CompilationServiceDeps {

@@ -11,7 +11,7 @@ export const stageLabels: Record<StartupProfileInput["stage"], string> = {
 };
 
 export const fundingLabels: Record<NonNullable<StartupProfileInput["fundingStage"]>, string> = {
-  bootstrapped: "Bootstrapped", pre_seed: "Pre-seed", seed: "Seed", series_a: "Series A", series_b_plus: "Series B or later",
+  bootstrapped: "Bootstrapped", pre_seed: "Pre-seed", seed: "Seed", series_a: "Series A", series_b: "Series B", series_b_plus: "Later than Series B",
 };
 
 export const kindLabels: Record<Opportunity["kind"], string> = {

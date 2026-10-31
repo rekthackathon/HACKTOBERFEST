@@ -8,8 +8,9 @@ import {
   requestGemmaText,
 } from "@/lib/ai/gemma";
 import { createCompilationService, createCompilationRateLimiter, type CompilationOutcome, type CompilationServiceDeps } from "@/lib/ai/compilation";
-import { mockOpportunities } from "@/lib/mocks";
+import { mockOpportunities, mockStartup } from "@/lib/mocks";
 import { opportunitySchema, type Opportunity } from "@/lib/contracts";
+import { evaluateEligibility } from "@/lib/eligibility";
 
 // The modules mark themselves server-only; tests run under plain Node resolution.
 vi.mock("server-only", () => ({}));
@@ -103,6 +104,13 @@ describe("Gemma client", () => {
       expect(prompt).toContain(JSON.stringify(config.model));
       expect(prompt).toContain('"unsupported"');
       expect(prompt).toContain("character-for-character");
+      expect(prompt).toContain("Split compound sentences into every distinct applicant condition");
+      expect(prompt).toContain("One verbatim quote may");
+      expect(prompt).toContain('["seed","series_a","series_b"]');
+      expect(prompt).toContain('"ai_product_required"');
+      expect(prompt).toContain('"full_time_cofounders_required"');
+      expect(prompt).toContain('"dedicated_ai_engineers_required"');
+      expect(prompt).toContain("notification");
       expect(prompt).toContain(opportunity.evidence[0]?.sourceUrl ?? "!MISSING!");
     });
   });
@@ -298,8 +306,8 @@ describe("AI compilation service", () => {
     const withUnsupported = {
       id: "sector",
       kind: "unsupported",
-      description: "Sector restriction cannot be evaluated",
-      reason: "The source restricts biotech programmes without a supported representation.",
+      description: "Fictional startups with employees may apply",
+      reason: "The startups and employees condition requires manual representation.",
       evidence: opportunity.evidence[0],
     };
     const { deps } = createRecordingDeps([modelBody(opportunity, { requirements: [withUnsupported], completeness: "partial" })]);
@@ -311,7 +319,7 @@ describe("AI compilation service", () => {
     expect(value.warnings.some((warning) => warning.includes("marked unsupported"))).toBe(false);
   });
 
-  it("downgrades requirements with unverified evidence to unsupported and marks the compilation partial", async () => {
+  it("discards requirements with unverified evidence instead of fabricating replacement evidence", async () => {
     const unverified = {
       id: "country",
       kind: "country",
@@ -323,14 +331,13 @@ describe("AI compilation service", () => {
     const service = createCompilationService(deps);
     const { value } = expectCompiled(await service.compile(opportunity));
     expect(value.completeness).toBe("partial");
-    expect(value.requirements[0]?.kind).toBe("unsupported");
-    expect(value.requirements[0]?.evidence.sourceUrl).toBe(opportunity.evidence[0]?.sourceUrl);
-    expect(value.warnings.some((warning) => warning.includes("marked unsupported"))).toBe(true);
+    expect(value.requirements).toEqual([]);
+    expect(value.warnings.some((warning) => warning.includes("discarded"))).toBe(true);
     // The verifier never invents or fabricates evidence.
     expect(records).toHaveLength(1);
   });
 
-  it("repoints unsupported rules with unverified evidence at a trusted record", async () => {
+  it("discards unsupported rules with unverified evidence instead of repointing them", async () => {
     const unverifiedUnsupported = {
       id: "check",
       kind: "unsupported",
@@ -341,12 +348,202 @@ describe("AI compilation service", () => {
     const { deps } = createRecordingDeps([modelBody(opportunity, { requirements: [unverifiedUnsupported], completeness: "partial" })]);
     const service = createCompilationService(deps);
     const { value } = expectCompiled(await service.compile(opportunity));
-    expect(value.requirements[0]?.kind).toBe("unsupported");
-    expect(value.requirements[0]?.evidence.sourceUrl).toBe(opportunity.evidence[0]?.sourceUrl);
+    expect(value.requirements).toEqual([]);
     expect(value.completeness).toBe("partial");
   });
 
-  it("accepts a fresh quote from the trusted source URL with whitespace differences", async () => {
+  it("rejects a Malaysia requirement attached to an unrelated company-age quote", async () => {
+    const countryEvidence = {
+      sourceUrl: "https://example.com/cradle-test",
+      quote: "The company must be based in Malaysia.",
+      locator: "Eligibility 1",
+      retrievedAt: "2026-10-31T00:00:00.000Z",
+    };
+    const ageEvidence = {
+      ...countryEvidence,
+      quote: "The company shall not be more than 5 years old.",
+      locator: "Eligibility 2",
+    };
+    const cradle = opportunitySchema.parse({
+      ...opportunity,
+      id: "00000000-0000-4000-8000-000000000010",
+      applicationUrl: countryEvidence.sourceUrl,
+      sourceText: `${countryEvidence.quote}\n${ageEvidence.quote}`,
+      evidence: [countryEvidence, ageEvidence],
+    });
+    const mismatched = {
+      id: "country",
+      kind: "country",
+      description: "The company must be based in Malaysia.",
+      allowed: ["MY"],
+      evidence: ageEvidence,
+    };
+    const { deps } = createRecordingDeps([modelBody(cradle, { opportunityId: cradle.id, requirements: [mismatched], warnings: [] })]);
+    const { value } = expectCompiled(await createCompilationService(deps).compile(cradle));
+    expect(value.requirements).toEqual([]);
+    expect(value.completeness).toBe("partial");
+    expect(value.warnings).toContainEqual(expect.stringContaining("not semantically relevant"));
+  });
+
+  it("keeps a Malaysia requirement with matching verbatim evidence", async () => {
+    const countryEvidence = {
+      sourceUrl: "https://example.com/cradle-country-test",
+      quote: "The company must be based in Malaysia.",
+      locator: "Eligibility",
+      retrievedAt: "2026-10-31T00:00:00.000Z",
+    };
+    const cradle = opportunitySchema.parse({
+      ...opportunity,
+      id: "00000000-0000-4000-8000-000000000011",
+      applicationUrl: countryEvidence.sourceUrl,
+      sourceText: countryEvidence.quote,
+      evidence: [countryEvidence],
+    });
+    const grounded = {
+      id: "country",
+      kind: "country",
+      description: "The company must be based in Malaysia.",
+      allowed: ["MY"],
+      evidence: countryEvidence,
+    };
+    const { deps } = createRecordingDeps([modelBody(cradle, { opportunityId: cradle.id, requirements: [grounded], warnings: [] })]);
+    const { value } = expectCompiled(await createCompilationService(deps).compile(cradle));
+    expect(value.requirements).toEqual([grounded]);
+    expect(value.completeness).toBe("complete");
+  });
+
+  it("extracts and evaluates distinct Google Accelerator conditions from shared verbatim quotes", async () => {
+    const sourceUrl = "https://example.com/google-accelerator-test";
+    const retrievedAt = "2026-10-31T00:00:00.000Z";
+    const cohortQuote = "This cohort of Google for Startups Accelerator: Southeast Asia will accept applications from Seed to Series B startups with an AI product headquartered in Southeast Asia.";
+    const teamQuote = "Their team should have full time cofounders, stacked tech team with dedicated AI engineers.";
+    const timelineQuote = "Applications close on 30 November 2026 and selected startups will be notified in January 2027.";
+    const cohortEvidence = { sourceUrl, quote: cohortQuote, locator: "Eligibility", retrievedAt };
+    const teamEvidence = { sourceUrl, quote: teamQuote, locator: "Team", retrievedAt };
+    const timelineEvidence = { sourceUrl, quote: timelineQuote, locator: "Timeline", retrievedAt };
+    const google = opportunitySchema.parse({
+      ...opportunity,
+      id: "00000000-0000-4000-8000-000000000014",
+      title: "Google for Startups Accelerator: Southeast Asia",
+      applicationUrl: sourceUrl,
+      countries: ["BN", "KH", "ID", "LA", "MY", "MM", "PH", "SG", "TH", "TL", "VN"],
+      sourceText: `${cohortQuote}\n${teamQuote}\n${timelineQuote}`,
+      evidence: [cohortEvidence, teamEvidence, timelineEvidence],
+    });
+    const requirements = [
+      { id: "asean-hq", kind: "country", description: "Headquartered in Southeast Asia", allowed: ["BN", "KH", "ID", "LA", "MY", "MM", "PH", "SG", "TH", "TL", "VN"], evidence: cohortEvidence },
+      { id: "funding-stage", kind: "funding_stage", description: "Seed to Series B", allowed: ["seed", "series_a", "series_b"], evidence: cohortEvidence },
+      { id: "ai-product", kind: "ai_product_required", description: "Has an AI product", evidence: cohortEvidence },
+      { id: "full-time-cofounders", kind: "full_time_cofounders_required", description: "Has full-time cofounders", evidence: teamEvidence },
+      { id: "ai-engineers", kind: "dedicated_ai_engineers_required", description: "Has dedicated AI engineers", evidence: teamEvidence },
+      { id: "notification-date", kind: "unsupported", description: "Applicants are notified in January 2027", reason: "Process timeline", evidence: timelineEvidence },
+    ];
+    const { deps } = createRecordingDeps([modelBody(google, {
+      opportunityId: google.id,
+      requirements,
+      warnings: [],
+    })]);
+    const { value } = expectCompiled(await createCompilationService(deps).compile(google));
+
+    expect(value.requirements.map((rule) => rule.kind)).toEqual([
+      "country",
+      "funding_stage",
+      "ai_product_required",
+      "full_time_cofounders_required",
+      "dedicated_ai_engineers_required",
+    ]);
+    expect(value.requirements.slice(0, 3).every((rule) => rule.evidence.quote === cohortQuote)).toBe(true);
+    expect(value.requirements.slice(3).every((rule) => rule.evidence.quote === teamQuote)).toBe(true);
+    expect(value.completeness).toBe("complete");
+    expect(value.warnings).toEqual([]);
+
+    expect(evaluateEligibility({
+      ...mockStartup,
+      country: "MY",
+      fundingStage: "seed",
+      hasAiProduct: "unknown",
+      hasFullTimeCofounders: "unknown",
+      hasDedicatedAiEngineers: "unknown",
+    }, value).status).toBe("needs_review");
+    expect(evaluateEligibility({
+      ...mockStartup,
+      country: "MY",
+      fundingStage: "series_b",
+      hasAiProduct: "yes",
+      hasFullTimeCofounders: "yes",
+      hasDedicatedAiEngineers: "yes",
+    }, value).status).toBe("potentially_eligible");
+  });
+
+  it("keeps the bounded conditional Malaysian ownership-or-employees rule", async () => {
+    const conditionalEvidence = {
+      sourceUrl: "https://example.com/conditional-test",
+      quote: "If Malaysian ownership is less than 51%, at least 70% of employees must be Malaysian.",
+      locator: "Ownership",
+      retrievedAt: "2026-10-31T00:00:00.000Z",
+    };
+    const programme = opportunitySchema.parse({
+      ...opportunity,
+      id: "00000000-0000-4000-8000-000000000013",
+      applicationUrl: conditionalEvidence.sourceUrl,
+      sourceText: conditionalEvidence.quote,
+      evidence: [conditionalEvidence],
+    });
+    const conditional = {
+      id: "malaysian-control",
+      kind: "malaysian_ownership_or_employees",
+      description: "At least 51% Malaysian ownership or at least 70% Malaysian employees",
+      ownershipMinimumPercent: 51,
+      employeeMinimumPercent: 70,
+      evidence: conditionalEvidence,
+    };
+    const { deps } = createRecordingDeps([modelBody(programme, {
+      opportunityId: programme.id,
+      requirements: [conditional],
+      warnings: [],
+    })]);
+    const { value } = expectCompiled(await createCompilationService(deps).compile(programme));
+    expect(value.requirements).toEqual([conditional]);
+  });
+
+  it("separates a post-funding MVP milestone from current eligibility requirements", async () => {
+    const milestoneEvidence = {
+      sourceUrl: "https://example.com/milestone-test",
+      quote: "The company must deliver a functional prototype or MVP by the end of the funding period.",
+      locator: "Deliverables",
+      retrievedAt: "2026-10-31T00:00:00.000Z",
+    };
+    const programme = opportunitySchema.parse({
+      ...opportunity,
+      id: "00000000-0000-4000-8000-000000000012",
+      applicationUrl: milestoneEvidence.sourceUrl,
+      sourceText: milestoneEvidence.quote,
+      evidence: [milestoneEvidence],
+    });
+    const misclassifiedRequirement = {
+      id: "mvp-delivery",
+      kind: "stage",
+      description: "Deliver a functional prototype or MVP by the end of funding",
+      allowed: ["prototype", "mvp"],
+      evidence: milestoneEvidence,
+    };
+    const { deps } = createRecordingDeps([modelBody(programme, {
+      opportunityId: programme.id,
+      requirements: [misclassifiedRequirement],
+      milestones: [],
+      warnings: [],
+    })]);
+    const { value } = expectCompiled(await createCompilationService(deps).compile(programme));
+    expect(value.requirements).toEqual([]);
+    expect(value.milestones).toEqual([{
+      id: misclassifiedRequirement.id,
+      kind: "post_funding_milestone",
+      description: misclassifiedRequirement.description,
+      evidence: milestoneEvidence,
+    }]);
+  });
+
+  it("rejects a non-verbatim quote even when its normalized whitespace matches the source", async () => {
     const rewrittenQuote = {
       id: "size",
       kind: "company_size_max",
@@ -362,8 +559,9 @@ describe("AI compilation service", () => {
     const { deps } = createRecordingDeps([modelBody(opportunity, { requirements: [rewrittenQuote], warnings: [] })]);
     const service = createCompilationService(deps);
     const { value } = expectCompiled(await service.compile(opportunity));
-    expect(value.requirements[0]?.kind).toBe("company_size_max");
-    expect(value.warnings.some((warning) => warning.includes("marked unsupported"))).toBe(false);
+    expect(value.requirements).toEqual([]);
+    expect(value.completeness).toBe("partial");
+    expect(value.warnings).toContainEqual(expect.stringContaining("discarded"));
   });
 
   it("reports NOT_CONFIGURED when AI settings are absent and never calls the provider", async () => {

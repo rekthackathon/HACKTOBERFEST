@@ -3,6 +3,8 @@ import { z } from "zod";
 
 export const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 export const DEFAULT_OLLAMA_MODEL = "qwen3:8b";
+export const OLLAMA_CLOUD_BASE_URL = "https://ollama.com";
+export const DEFAULT_OLLAMA_CLOUD_MODEL = "gemma4:31b";
 const LOOPBACK_V4_PATTERN = /^127(?:\.\d{1,3}){3}$/;
 
 function isLoopbackHostname(hostname: string): boolean {
@@ -40,33 +42,60 @@ const ollamaConfigSchema = z.object({
   model: z.string().trim().min(1),
 });
 
-export type AiConfig = z.infer<typeof gemmaConfigSchema> | z.infer<typeof ollamaConfigSchema>;
+const ollamaCloudConfigSchema = z.object({
+  provider: z.literal("ollama-cloud"),
+  baseUrl: z.literal(OLLAMA_CLOUD_BASE_URL),
+  apiKey: z.string().trim().min(1),
+  model: z.string().trim().min(1),
+});
+
+export type AiConfig = z.infer<typeof gemmaConfigSchema>
+  | z.infer<typeof ollamaConfigSchema>
+  | z.infer<typeof ollamaCloudConfigSchema>;
 
 /** Primary provider configuration for the evidence-backed compilation service. */
 export function getAiConfig(): AiConfig {
   const provider = process.env.AI_PROVIDER?.trim() || "ollama";
-  const candidate = provider === "ollama"
-    ? {
+  let candidate: Record<string, unknown>;
+  let schema: typeof ollamaConfigSchema | typeof ollamaCloudConfigSchema | typeof gemmaConfigSchema;
+  if (provider === "ollama") {
+    candidate = {
         provider,
         baseUrl: process.env.OLLAMA_BASE_URL?.trim() || DEFAULT_OLLAMA_BASE_URL,
         model: process.env.OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL,
-      }
-    : {
+    };
+    schema = ollamaConfigSchema;
+  } else if (provider === "ollama-cloud") {
+    candidate = {
+      provider,
+      baseUrl: OLLAMA_CLOUD_BASE_URL,
+      apiKey: process.env.OLLAMA_API_KEY,
+      model: process.env.OLLAMA_CLOUD_MODEL?.trim() || DEFAULT_OLLAMA_CLOUD_MODEL,
+    };
+    schema = ollamaCloudConfigSchema;
+  } else {
+    candidate = {
         provider,
         baseUrl: process.env.AI_BASE_URL,
         apiKey: process.env.AI_API_KEY,
         model: process.env.AI_MODEL,
-      };
-  const parsed = (provider === "ollama" ? ollamaConfigSchema : gemmaConfigSchema).safeParse(candidate);
-  if (!parsed.success) {
-    if (provider !== "ollama" && provider !== "gemma") {
-      throw new Error("AI inference is not configured. AI_PROVIDER must be ollama or gemma.");
-    }
-    throw new Error(provider === "gemma"
-      ? "Gemma inference is not configured. Set HTTPS AI_BASE_URL, AI_API_KEY, and AI_MODEL on the server."
-      : "Ollama inference is not configured. Set a valid OLLAMA_BASE_URL and OLLAMA_MODEL on the server.");
+    };
+    schema = gemmaConfigSchema;
   }
-  return parsed.data;
+  const parsed = schema.safeParse(candidate);
+  if (!parsed.success) {
+    if (provider !== "ollama" && provider !== "ollama-cloud" && provider !== "gemma") {
+      throw new Error("AI inference is not configured. AI_PROVIDER must be ollama, ollama-cloud, or gemma.");
+    }
+    if (provider === "gemma") {
+      throw new Error("Gemma inference is not configured. Set HTTPS AI_BASE_URL, AI_API_KEY, and AI_MODEL on the server.");
+    }
+    if (provider === "ollama-cloud") {
+      throw new Error("Ollama Cloud inference is not configured. Set OLLAMA_API_KEY and optionally OLLAMA_CLOUD_MODEL on the server.");
+    }
+    throw new Error("Ollama inference is not configured. Set a valid OLLAMA_BASE_URL and OLLAMA_MODEL on the server.");
+  }
+  return parsed.data as AiConfig;
 }
 
 const openAiCompatibleConfigSchema = z.object({
