@@ -107,14 +107,13 @@ Expected demo outcomes with the seeded data. Make sure the AI owner sees these. 
 - **Google SEA:** `needs_review` because the AI-product and team criteria are unsupported. Changing the profile's funding stage to `bootstrapped` gives `ineligible`.
 - **Cradle Spark/Sprint:** `needs_review` because age, revenue, and ownership are unsupported. A Singapore startup gives `ineligible` on the country rule.
 
-### Model: Gemma 4 (decided by the lead, 31 October 2026)
+### Model: Qwen3 (changed from Gemma 4 by the lead, 31 October 2026)
 
-- **Model family:** Google DeepMind Gemma 4, open weights, **Apache 2.0** per the [model card](https://huggingface.co/google/gemma-4-31B-it). Sizes are E2B, E4B, 12B, 26B A4B (MoE) and 31B (dense).
-- **Recommended checkpoint:** `google/gemma-4-31B-it` (instruction-tuned, 256K context). It handles rule extraction best of the sizes. `google/gemma-4-26B-A4B-it` is the faster fallback.
-- **Provider (the AI owner confirms with one test call before wiring):** OpenRouter's OpenAI-compatible API. Set `AI_BASE_URL=https://openrouter.ai/api/v1` and `AI_MODEL=google/gemma-4-31b-it` ([listing](https://openrouter.ai/google/gemma-4-31b-it)). Avoid the `:free` variant for the demo, because its rate limits are shared. Google AI Studio's OpenAI-compatible endpoint is an alternative; check that it lists the Gemma 4 model before using it.
-- **Weights URL:** set `AI_MODEL_WEIGHTS_URL=https://huggingface.co/google/gemma-4-31B-it`. Record the Hugging Face revision hash and the provider model ID in the README.
-- **Gemma 4 notes:** it has configurable thinking modes and native system-prompt support. Parse only `choices[0].message.content` and ignore any reasoning fields. If the upstream provider rejects `response_format`, fall back to extracting the first JSON object from the content, then let Zod reject anything malformed.
-- An OpenAI-compatible endpoint is only an interface. The demo claim rests on the model card and the provider model ID above.
+- **Checkpoint:** [`Qwen/Qwen3-235B-A22B-Instruct-2507`](https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507), revision `ac9c66cc9b46af7306746a9250f23d47083d689e`, **Apache 2.0**, ungated (from Hugging Face model metadata, checked 31 October 2026). This is a mixture-of-experts model with 235B parameters, 22B of them active per token.
+- **Why this one:** it is the non-thinking instruct release, so it returns JSON without reasoning blocks and answers faster. It is also cheap on OpenRouter ($0.09 per 1M input tokens and $0.55 per 1M output). The newer `qwen/qwen3.8-27b` (Apache 2.0, `Qwen/Qwen3.8-27B`) is a fallback, but it is a reasoning model, so it is slower.
+- **Provider:** OpenRouter's OpenAI-compatible API. `AI_BASE_URL=https://openrouter.ai/api/v1`, `AI_MODEL=qwen/qwen3-235b-a22b-2507`, `AI_MODEL_WEIGHTS_URL=https://huggingface.co/Qwen/Qwen3-235B-A22B-Instruct-2507`. OpenRouter's model list maps this ID to the Hugging Face checkpoint above and lists support for `response_format`.
+- **Not verified yet:** a live call. It needs `AI_API_KEY` in Vercel and in `.env.local`.
+- The code is model-agnostic. Switching models means changing these environment variables and redeploying; the cache key includes the model ID, so results are not reused across models.
 
 ## Step 4: Integration checks (DevOps lead)
 
@@ -128,7 +127,7 @@ Expected demo outcomes with the seeded data. Make sure the AI owner sees these. 
    - user opportunity insert is denied
    
    It deletes its startup rows afterwards. The test users remain in Auth and can be deleted in the dashboard.
-3. API flow: `npm run build; npm start`, then `node --env-file=.env.local scripts/smoke-e2e.mjs http://localhost:3000`, or pass the live URL. It runs sign-up → profile 404 → save → reload → update, a cross-user 404, forged-owner rejection, anonymous 401s, and one Gemma eligibility check per opportunity, with timings. Add `--skip-ai` to skip the model calls.
+3. API flow: `npm run build; npm start`, then `node --env-file=.env.local scripts/smoke-e2e.mjs http://localhost:3000`, or pass the live URL. It runs sign-up → profile 404 → save → reload → update, a cross-user 404, forged-owner rejection, anonymous 401s, and one model eligibility check per opportunity, with timings. Add `--skip-ai` to skip the model calls.
 4. Manual smoke on the live URL: register, log in, save the profile, hard reload and see the values, run eligibility on each seeded opportunity, sign out, and confirm `/api/startups/me` returns 401.
 
 ## Demo video script (under 3 minutes)
@@ -147,7 +146,7 @@ Expected demo outcomes with the seeded data. Make sure the AI owner sees these. 
 
 | Blocker | Owner | Next action |
 | --- | --- | --- |
-| Gemma 4 provider not confirmed | AI | One test call to `google/gemma-4-31b-it`, then set the AI env vars in Vercel and record the revision and provider ID |
+| Qwen live call not verified | Lead or AI | Set `AI_API_KEY` and the three other AI variables in Vercel, then run the smoke script |
 | Profile form fields don't match the contract | Frontend | Apply the field mapping in Step 2 |
 | Remote migration drift, schema/RLS unverified | Backend | Step 0.1–0.2 |
 | Seed data not applied | Backend | Step 0.3 |

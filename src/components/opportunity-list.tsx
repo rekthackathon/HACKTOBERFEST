@@ -83,7 +83,7 @@ export function OpportunityList() {
           <ul className="mt-2 space-y-2">{item.evidence.map(e => <li key={e.quote}><blockquote className="border-l-4 border-slate-300 pl-3 italic leading-6 text-slate-700">&ldquo;{e.quote}&rdquo;</blockquote></li>)}</ul>
         </details>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={() => check(item.id)} disabled={current?.state === "running"}>{current?.state === "running" ? "Checking with Gemma…" : current?.state === "done" ? "Check again" : "Check my eligibility"}</Button>
+          <Button type="button" onClick={() => check(item.id)} disabled={current?.state === "running"}>{current?.state === "running" ? "Checking…" : current?.state === "done" ? "Check again" : "Check my eligibility"}</Button>
           <a href={item.applicationUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-teal-800 underline underline-offset-4">Official programme page</a>
         </div>
         {current?.state === "running" && <p role="status" className="mt-3 text-sm text-slate-600">Reading the official requirements. This can take up to a minute.</p>}
