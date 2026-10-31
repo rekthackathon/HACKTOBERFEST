@@ -4,11 +4,13 @@ import { getSupabaseEnvironment, isSupabaseConfigured } from "../src/lib/env/pub
 afterEach(() => vi.unstubAllEnvs());
 
 describe("Supabase environment", () => {
-  it("allows import without credentials and fails when a client is requested", () => {
+  it("falls back to the public demo project when env vars are missing", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
-    expect(isSupabaseConfigured()).toBe(false);
-    expect(() => getSupabaseEnvironment()).toThrow("Configure NEXT_PUBLIC_SUPABASE_URL");
+    expect(isSupabaseConfigured()).toBe(true);
+    const env = getSupabaseEnvironment();
+    expect(env.url).toBe("https://cvxjlstnhanlgfcwpekq.supabase.co");
+    expect(env.publishableKey.startsWith("sb_publishable_")).toBe(true);
   });
 
   it("validates the URL without revealing a configured key in errors", () => {

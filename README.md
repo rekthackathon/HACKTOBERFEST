@@ -2,7 +2,7 @@
 
 A professional discovery gateway for ASEAN founders, startups, investors, and ecosystem organisations. Built for Hacktoberfest Hack Day KL 2026, Problem Statement 2, Category B.
 
-The planned AI feature compiles programme requirements using the open-weight **Gemma 4** model (Apache 2.0), validates the result with Zod, and evaluates supported rules deterministically. The inference provider is pending a confirmed test call. It must return potentially eligible, ineligible, or needs review with original evidence. A model's unsupported assumptions are never eligibility requirements. DigitalOcean is optional and is not required by this architecture.
+The planned AI feature compiles programme requirements using the open-weight **Qwen3-235B-A22B-Instruct-2507** model (Apache 2.0) via OpenRouter, validates the result with Zod, and evaluates supported rules deterministically. It must return potentially eligible, ineligible, or needs review with original evidence. A model's unsupported assumptions are never eligibility requirements. DigitalOcean is optional and is not required by this architecture.
 
 ## Current scope
 
@@ -58,15 +58,14 @@ Use [the deployment runbook](docs/deployment.md). Vercel Git integration handles
 
 ## Open-weight AI qualification
 
-**The team selected Google DeepMind Gemma 4** (open weights, Apache 2.0). See [the MVP plan](docs/mvp-plan.md) for integration details.
+**Inference runs on Ollama** through its OpenAI-compatible `/v1/chat/completions` API. The model is whatever open-weight tag `AI_MODEL` names; record the exact tag, its upstream weights and license here before submission.
 
-| Integration setting | Status |
-| --- | --- |
-| Model family | Gemma 4, [Apache 2.0 model card](https://huggingface.co/google/gemma-4-31B-it) |
-| Checkpoint | `google/gemma-4-31B-it` recommended; revision hash to be recorded by the AI owner |
-| Inference provider | OpenRouter (`google/gemma-4-31b-it`) proposed; pending a confirmed test call |
-| `AI_MODEL`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL_WEIGHTS_URL` | Server-only Vercel variables; not yet set |
-| Live extraction | Not implemented yet (see the MVP plan, Step 3) |
+| Mode | Server-only variables | Works on Vercel |
+| --- | --- | --- |
+| Local Ollama (for example a Qwen tag from `ollama list`) | `AI_BASE_URL=http://localhost:11434/v1`, `AI_MODEL=<tag>`, no key. Optional `AI_TIMEOUT_MS=180000` and `AI_REASONING_EFFORT=none` for faster Qwen3 answers | No; only when the app runs on the same machine |
+| Ollama Cloud | `AI_BASE_URL=https://ollama.com/v1`, `AI_MODEL=<tag from https://ollama.com/api/tags>`, `AI_API_KEY=<ollama.com key>` | Yes |
+
+Plain HTTP is accepted only for loopback hosts; remote providers need HTTPS and a key. Extraction lives in `src/lib/ai/compile.ts` (prompt version `eligibility-extract-v1`), and every quote is verified against the stored source text.
 
 Select a specific published open-weight checkpoint whose model card/license permits the use, then record its weights URL, revision, license, inference provider, and provider model ID. Do not assume a hosted alias proves which weights run. An OpenAI-compatible API is an interface, not evidence that its model has published weights. The AI engineer must demonstrate actual source extraction through the selected model and include evidence-backed results and failure handling before submission. Model weights retain their own licenses; MIT covers this repository's original code.
 

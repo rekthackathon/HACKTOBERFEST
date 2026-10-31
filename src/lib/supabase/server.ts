@@ -21,6 +21,17 @@ export async function createClient() {
   });
 }
 
+/**
+ * Returns a user-scoped client plus the server-verified user, or null when signed out.
+ * Queries made with this client run under the user's JWT, so RLS applies.
+ */
+export async function getAuthContext() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return { supabase, user: data.user };
+}
+
 /** Call in each protected server operation; the proxy alone is not authorization. */
 export async function getAuthenticatedUser() {
   const supabase = await createClient();
