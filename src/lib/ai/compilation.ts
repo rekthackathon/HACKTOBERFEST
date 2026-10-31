@@ -204,6 +204,9 @@ function evidenceSupportsRequirement(requirement: EligibilityRequirement, quote:
     case "dedicated_ai_engineers_required": return /dedicated/.test(text)
       && /(\bai\b|artificial intelligence)/.test(text)
       && /engineer/.test(text);
+    case "individual_applicant_residency": return /individual/.test(text)
+      && /(malaysian|malaysia)/.test(text)
+      && /(resid|citizen|national|open to)/.test(text);
     case "unsupported": return hasMeaningfulOverlap(`${requirement.description} ${requirement.reason}`, text);
   }
 }
@@ -224,7 +227,13 @@ function evidenceSupportsMilestone(milestone: PostFundingMilestone, quote: strin
     && hasMeaningfulOverlap(milestone.description, text);
 }
 
-const MISMATCHED_EVIDENCE_WARNING = "One or more extracted conditions were discarded because their evidence was missing, untrusted, or not semantically relevant to the reported condition.";
+function discardedEvidenceWarning(description: string, verified: boolean): string {
+  const condition = description.trim().slice(0, 180);
+  const quotedCondition = condition ? ` “${condition}”` : "";
+  return verified
+    ? `An extracted condition${quotedCondition} was excluded because its quote did not support that rule. Check the source and extraction.`
+    : `An extracted condition${quotedCondition} was excluded because its evidence was missing or did not match the trusted source.`;
+}
 
 /**
  * Discards ungrounded or semantically mismatched conditions. It never invents
@@ -232,7 +241,7 @@ const MISMATCHED_EVIDENCE_WARNING = "One or more extracted conditions were disca
  * rule. Any discard marks the compilation partial and leaves an audit warning.
  */
 function groundCompilation(parsed: CompiledRequirements, opportunity: Opportunity, compiledAt: string): CompiledRequirements {
-  let discarded = 0;
+  const discardWarnings: string[] = [];
   const reclassifiedMilestones: PostFundingMilestone[] = [];
   const requirements = parsed.requirements.filter((requirement) => {
     const verdict = verifyEvidence(requirement.evidence, opportunity);
@@ -247,19 +256,46 @@ function groundCompilation(parsed: CompiledRequirements, opportunity: Opportunit
       return false;
     }
     const keep = verdict.verified && evidenceSupportsRequirement(requirement, verdict.evidence.quote);
-    if (!keep) discarded += 1;
+    if (!keep) discardWarnings.push(discardedEvidenceWarning(requirement.description, verdict.verified));
     return keep;
   });
   const milestones = [...parsed.milestones.filter((milestone) => {
     const verdict = verifyEvidence(milestone.evidence, opportunity);
     if (verdict.verified && isApplicationTimelineLanguage(verdict.evidence.quote)) return false;
     const keep = verdict.verified && evidenceSupportsMilestone(milestone, verdict.evidence.quote);
-    if (!keep) discarded += 1;
+    if (!keep) discardWarnings.push(discardedEvidenceWarning(milestone.description, verdict.verified));
     return keep;
   }), ...reclassifiedMilestones];
-  const warnings = [...parsed.warnings, ...(discarded > 0 ? [MISMATCHED_EVIDENCE_WARNING] : [])].slice(0, 100);
-  const completeness = discarded > 0 ? "partial" : parsed.completeness;
+  const warnings = [...parsed.warnings, ...discardWarnings].slice(0, 100);
+  const completeness = discardWarnings.length > 0 ? "partial" : parsed.completeness;
   return { ...parsed, compiledAt, completeness, requirements, milestones, warnings };
+}
+
+/**
+ * Model generated IDs and timestamps are bookkeeping, not eligibility facts.
+ * Replace them with server values before strict contract validation so a
+ * repeated or malformed ID cannot prevent an otherwise valid extraction.
+ * Requirement contents and evidence are left untouched and remain strictly
+ * validated below.
+ */
+function normalizeModelEnvelope(value: unknown, opportunity: Opportunity, model: string, compiledAt: string): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  const output = value as Record<string, unknown>;
+  const uniqueIds = (items: unknown, prefix: string): unknown => {
+    if (!Array.isArray(items)) return items;
+    return items.map((item, index) => {
+      if (item === null || typeof item !== "object" || Array.isArray(item)) return item;
+      return { ...(item as Record<string, unknown>), id: `${prefix}-${index + 1}` };
+    });
+  };
+  return {
+    ...output,
+    ...("opportunityId" in output ? {} : { opportunityId: opportunity.id }),
+    ...( "model" in output ? {} : { model }),
+    compiledAt,
+    requirements: uniqueIds(output.requirements, "requirement"),
+    milestones: uniqueIds(output.milestones, "milestone"),
+  };
 }
 
 /** Selects exactly one server-only client from the validated provider configuration. */
@@ -315,7 +351,7 @@ export function createCompilationService(overrides: Partial<CompilationServiceDe
         throw new AiProviderError("VALIDATION_ERROR", "The assembled compilation request exceeds the prompt size limit.");
       }
       const modelText = await deps.request(config, prompt);
-      const rawOutput = parseModelJson(modelText);
+      const rawOutput = normalizeModelEnvelope(parseModelJson(modelText), opportunity, config.model, deps.nowIso());
       const parsed = compiledRequirementsSchema.safeParse(rawOutput);
       if (!parsed.success) {
         throw new AiProviderError("AI_UNAVAILABLE", "Model output failed schema validation.");

@@ -5,6 +5,7 @@ export const startupStageSchema = z.enum(["idea", "prototype", "mvp", "growth", 
 export const fundingStageSchema = z.enum(["bootstrapped", "pre_seed", "seed", "series_a", "series_b", "series_b_plus"]);
 export const yesNoUnknownSchema = z.enum(["yes", "no", "unknown"]);
 export const ipRightsStatusSchema = yesNoUnknownSchema;
+export const individualApplicantStatusSchema = z.enum(["eligible", "ineligible", "not_applicable", "unknown"]);
 const dateSchema = z.iso.date();
 const httpsUrlSchema = z.url().refine((value) => value.startsWith("https://"), "Use an HTTPS source URL");
 const optionalPercentSchema = z.number().min(0).max(100).nullable().default(null);
@@ -27,6 +28,7 @@ export const startupProfileInputSchema = z.object({
   hasAiProduct: yesNoUnknownSchema.default("unknown"),
   hasFullTimeCofounders: yesNoUnknownSchema.default("unknown"),
   hasDedicatedAiEngineers: yesNoUnknownSchema.default("unknown"),
+  individualApplicantStatus: individualApplicantStatusSchema.default("unknown"),
 }).strict();
 
 export const startupProfileSchema = startupProfileInputSchema.extend({
@@ -84,6 +86,7 @@ export const eligibilityRequirementSchema = z.discriminatedUnion("kind", [
   z.object({ ...ruleBase, kind: z.literal("ai_product_required") }).strict(),
   z.object({ ...ruleBase, kind: z.literal("full_time_cofounders_required") }).strict(),
   z.object({ ...ruleBase, kind: z.literal("dedicated_ai_engineers_required") }).strict(),
+  z.object({ ...ruleBase, kind: z.literal("individual_applicant_residency") }).strict(),
   z.object({ ...ruleBase, kind: z.literal("unsupported"), reason: z.string().trim().min(1).max(1000) }).strict(),
 ]);
 

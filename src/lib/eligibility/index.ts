@@ -60,6 +60,9 @@ function check(startup: StartupProfile, rule: EligibilityRequirement, evaluation
     case "dedicated_ai_engineers_required":
       if (startup.hasDedicatedAiEngineers === "unknown") return { outcome: "unknown", reason: "Whether the startup has dedicated AI engineers is unknown." };
       passes = startup.hasDedicatedAiEngineers === "yes"; break;
+    case "individual_applicant_residency":
+      if (startup.individualApplicantStatus === "unknown") return { outcome: "unknown", reason: "Individual applicant residency eligibility is unknown." };
+      passes = startup.individualApplicantStatus === "eligible" || startup.individualApplicantStatus === "not_applicable"; break;
     case "unsupported": return { outcome: "unknown", reason: rule.reason };
   }
   return { outcome: passes ? "pass" : "fail", reason: `${passes ? "Meets" : "Does not meet"} requirement: ${rule.description}` };

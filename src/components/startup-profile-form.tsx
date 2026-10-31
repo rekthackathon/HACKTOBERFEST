@@ -26,6 +26,7 @@ type FormState = {
   hasAiProduct: "yes" | "no" | "unknown";
   hasFullTimeCofounders: "yes" | "no" | "unknown";
   hasDedicatedAiEngineers: "yes" | "no" | "unknown";
+  individualApplicantStatus: "eligible" | "ineligible" | "not_applicable" | "unknown";
 };
 const empty: FormState = {
   name: "",
@@ -45,6 +46,7 @@ const empty: FormState = {
   hasAiProduct: "unknown",
   hasFullTimeCofounders: "unknown",
   hasDedicatedAiEngineers: "unknown",
+  individualApplicantStatus: "unknown",
 };
 type Status = "loading" | "ready" | "signed-out" | "unavailable";
 function fromProfile(p: StartupProfile): FormState {
@@ -66,6 +68,7 @@ function fromProfile(p: StartupProfile): FormState {
     hasAiProduct: p.hasAiProduct ?? "unknown",
     hasFullTimeCofounders: p.hasFullTimeCofounders ?? "unknown",
     hasDedicatedAiEngineers: p.hasDedicatedAiEngineers ?? "unknown",
+    individualApplicantStatus: p.individualApplicantStatus ?? "unknown",
   };
 }
 const optionalNumber = (value: string) => value.trim() === "" ? null : Number(value);
@@ -89,6 +92,7 @@ function toInput(f: FormState) {
     hasAiProduct: f.hasAiProduct,
     hasFullTimeCofounders: f.hasFullTimeCofounders,
     hasDedicatedAiEngineers: f.hasDedicatedAiEngineers,
+    individualApplicantStatus: f.individualApplicantStatus,
   } satisfies Record<keyof StartupProfileInput, unknown>);
 }
 function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
@@ -183,70 +187,67 @@ export function StartupProfileForm() {
           </div>
         </div>
       </Section>
-      <Section title="Product and team" hint="Optional structured facts used only when a programme states these requirements.">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label htmlFor="ai-product" className="mb-1.5 block text-sm font-semibold">Has an AI product</label>
-            <select id="ai-product" value={p.hasAiProduct} onChange={e => set("hasAiProduct", e.target.value as FormState["hasAiProduct"])} className={field}>
-              <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
-            </select>
+      <section className="border-t border-slate-300 py-8">
+        <details className="group">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-700 [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className={`${display} block text-lg font-semibold`}>More eligibility details <span className="font-sans text-sm font-normal text-slate-600">(optional)</span></span>
+              <span className="mt-1 block text-sm leading-6 text-slate-600">Add these only if you know them. They help check specific programme conditions.</span>
+            </span>
+            <span aria-hidden="true" className="text-xl text-teal-800 group-open:rotate-180">⌄</span>
+          </summary>
+          <div className="mt-6 space-y-8">
+            <div>
+              <h2 className={`${display} mb-1 text-base font-semibold`}>Product and team</h2>
+              <p className="mb-4 text-sm text-slate-600">Choose “Not sure” when a detail does not apply or you do not know.</p>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="ai-product" className="mb-1.5 block text-sm font-semibold">Do you have an AI product?</label>
+                  <select id="ai-product" value={p.hasAiProduct} onChange={e => set("hasAiProduct", e.target.value as FormState["hasAiProduct"])} className={field}>
+                    <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="full-time-cofounders" className="mb-1.5 block text-sm font-semibold">Do you have full-time cofounders?</label>
+                  <select id="full-time-cofounders" value={p.hasFullTimeCofounders} onChange={e => set("hasFullTimeCofounders", e.target.value as FormState["hasFullTimeCofounders"])} className={field}>
+                    <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="ai-engineers" className="mb-1.5 block text-sm font-semibold">Do you have dedicated AI engineers?</label>
+                  <select id="ai-engineers" value={p.hasDedicatedAiEngineers} onChange={e => set("hasDedicatedAiEngineers", e.target.value as FormState["hasDedicatedAiEngineers"])} className={field}>
+                    <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="individual-residency" className="mb-1.5 block text-sm font-semibold">For individual applications, is the applicant Malaysian or living in Malaysia?</label>
+                  <select id="individual-residency" value={p.individualApplicantStatus} onChange={e => set("individualApplicantStatus", e.target.value as FormState["individualApplicantStatus"])} className={field}>
+                    <option value="unknown">Not sure</option><option value="eligible">Yes</option><option value="ineligible">No</option><option value="not_applicable">Applying as a company</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-slate-200 pt-6">
+              <h2 className={`${display} mb-4 text-base font-semibold`}>Company details</h2>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div><label htmlFor="size" className="mb-1.5 block text-sm font-semibold">Team size</label><input id="size" type="number" inputMode="numeric" min={1} step={1} value={p.companySize} onChange={e => set("companySize", e.target.value)} className={field} /></div>
+                <div><label htmlFor="incorporated" className="mb-1.5 block text-sm font-semibold">Incorporation date</label><input id="incorporated" type="date" value={p.incorporationDate} onChange={e => set("incorporationDate", e.target.value)} className={field} /></div>
+                <div><label htmlFor="revenue" className="mb-1.5 block text-sm font-semibold">Accumulated revenue (MYR)</label><input id="revenue" type="number" inputMode="decimal" min={0} step="0.01" value={p.accumulatedRevenueMyr} onChange={e => set("accumulatedRevenueMyr", e.target.value)} className={field} /></div>
+                <div><label htmlFor="participants" className="mb-1.5 block text-sm font-semibold">Application participants</label><input id="participants" type="number" inputMode="numeric" min={1} step={1} value={p.applicationParticipantCount} onChange={e => set("applicationParticipantCount", e.target.value)} className={field} /></div>
+                <div><label htmlFor="malaysian-ownership" className="mb-1.5 block text-sm font-semibold">Malaysian ownership (%)</label><input id="malaysian-ownership" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.malaysianOwnershipPercent} onChange={e => set("malaysianOwnershipPercent", e.target.value)} className={field} /></div>
+                <div><label htmlFor="malaysian-employees" className="mb-1.5 block text-sm font-semibold">Malaysian employees (%)</label><input id="malaysian-employees" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.malaysianEmployeePercent} onChange={e => set("malaysianEmployeePercent", e.target.value)} className={field} /></div>
+                <div><label htmlFor="external-shareholding" className="mb-1.5 block text-sm font-semibold">Largest external entity shareholding (%)</label><input id="external-shareholding" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.largestExternalEntityShareholdingPercent} onChange={e => set("largestExternalEntityShareholdingPercent", e.target.value)} className={field} /></div>
+                <div>
+                  <label htmlFor="ip-rights" className="mb-1.5 block text-sm font-semibold">Do you own the required IP rights?</label>
+                  <select id="ip-rights" value={p.ownsRequiredIpRights} onChange={e => set("ownsRequiredIpRights", e.target.value as FormState["ownsRequiredIpRights"])} className={field}>
+                    <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label htmlFor="full-time-cofounders" className="mb-1.5 block text-sm font-semibold">Has full-time cofounders</label>
-            <select id="full-time-cofounders" value={p.hasFullTimeCofounders} onChange={e => set("hasFullTimeCofounders", e.target.value as FormState["hasFullTimeCofounders"])} className={field}>
-              <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="ai-engineers" className="mb-1.5 block text-sm font-semibold">Has dedicated AI engineers</label>
-            <select id="ai-engineers" value={p.hasDedicatedAiEngineers} onChange={e => set("hasDedicatedAiEngineers", e.target.value as FormState["hasDedicatedAiEngineers"])} className={field}>
-              <option value="unknown">Not sure</option><option value="yes">Yes</option><option value="no">No</option>
-            </select>
-          </div>
-        </div>
-      </Section>
-      <Section title="Company" hint="Optional. Leave blank if unknown; checks then mark the rule for review.">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label htmlFor="size" className="mb-1.5 block text-sm font-semibold">Team size</label>
-            <input id="size" type="number" inputMode="numeric" min={1} step={1} value={p.companySize} onChange={e => set("companySize", e.target.value)} className={field} />
-          </div>
-          <div>
-            <label htmlFor="incorporated" className="mb-1.5 block text-sm font-semibold">Incorporation date</label>
-            <input id="incorporated" type="date" value={p.incorporationDate} onChange={e => set("incorporationDate", e.target.value)} className={field} />
-          </div>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label htmlFor="revenue" className="mb-1.5 block text-sm font-semibold">Accumulated revenue (MYR)</label>
-            <input id="revenue" type="number" inputMode="decimal" min={0} step="0.01" value={p.accumulatedRevenueMyr} onChange={e => set("accumulatedRevenueMyr", e.target.value)} className={field} />
-          </div>
-          <div>
-            <label htmlFor="participants" className="mb-1.5 block text-sm font-semibold">Application participants</label>
-            <input id="participants" type="number" inputMode="numeric" min={1} step={1} value={p.applicationParticipantCount} onChange={e => set("applicationParticipantCount", e.target.value)} className={field} />
-          </div>
-          <div>
-            <label htmlFor="malaysian-ownership" className="mb-1.5 block text-sm font-semibold">Malaysian ownership (%)</label>
-            <input id="malaysian-ownership" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.malaysianOwnershipPercent} onChange={e => set("malaysianOwnershipPercent", e.target.value)} className={field} />
-          </div>
-          <div>
-            <label htmlFor="malaysian-employees" className="mb-1.5 block text-sm font-semibold">Malaysian employees (%)</label>
-            <input id="malaysian-employees" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.malaysianEmployeePercent} onChange={e => set("malaysianEmployeePercent", e.target.value)} className={field} />
-          </div>
-          <div>
-            <label htmlFor="external-shareholding" className="mb-1.5 block text-sm font-semibold">Largest external entity shareholding (%)</label>
-            <input id="external-shareholding" type="number" inputMode="decimal" min={0} max={100} step="0.01" value={p.largestExternalEntityShareholdingPercent} onChange={e => set("largestExternalEntityShareholdingPercent", e.target.value)} className={field} />
-          </div>
-          <div>
-            <label htmlFor="ip-rights" className="mb-1.5 block text-sm font-semibold">Owns required IP rights</label>
-            <select id="ip-rights" value={p.ownsRequiredIpRights} onChange={e => set("ownsRequiredIpRights", e.target.value as FormState["ownsRequiredIpRights"])} className={field}>
-              <option value="unknown">Not sure</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </div>
-        </div>
-      </Section>
+        </details>
+      </section>
       <div className="space-y-4 border-t border-slate-300 pt-8">
         {error && <p role="alert" className="border-l-4 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</p>}
         {notice && <p role="status" className="bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-900">{notice} <Link href="/opportunities" className="underline underline-offset-4">Check opportunities</Link></p>}
