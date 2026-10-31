@@ -114,8 +114,8 @@ describe("AI provider configuration", () => {
     vi.stubEnv("AI_BASE_URL", "http://localhost:11434/v1");
     vi.stubEnv("AI_API_KEY", "");
     vi.stubEnv("AI_MODEL", "qwen3:test");
-    const { getAiConfig } = await import("@/lib/ai/config");
-    expect(getAiConfig()).toMatchObject({ baseUrl: "http://localhost:11434/v1", apiKey: "" });
+    const { getOpenAiCompatibleConfig } = await import("@/lib/ai/config");
+    expect(getOpenAiCompatibleConfig()).toMatchObject({ baseUrl: "http://localhost:11434/v1", apiKey: "" });
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(new Headers(init?.headers).has("authorization")).toBe(false);
       return Response.json({ choices: [{ message: { content: "{\"completeness\":\"complete\",\"requirements\":[],\"warnings\":[]}" } }] });
@@ -127,14 +127,14 @@ describe("AI provider configuration", () => {
   });
 
   it("rejects plain HTTP to remote hosts and remote providers without a key", async () => {
-    const { getAiConfig } = await import("@/lib/ai/config");
+    const { getOpenAiCompatibleConfig } = await import("@/lib/ai/config");
     vi.stubEnv("AI_MODEL", "m");
     vi.stubEnv("AI_API_KEY", "k");
     vi.stubEnv("AI_BASE_URL", "http://provider.example.com/v1");
-    expect(() => getAiConfig()).toThrow(/not configured/);
+    expect(() => getOpenAiCompatibleConfig()).toThrow(/not configured/);
     vi.stubEnv("AI_BASE_URL", "https://ollama.com/v1");
     vi.stubEnv("AI_API_KEY", "");
-    expect(() => getAiConfig()).toThrow(/not configured/);
+    expect(() => getOpenAiCompatibleConfig()).toThrow(/not configured/);
   });
 });
 

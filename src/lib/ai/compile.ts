@@ -4,7 +4,7 @@ import { z } from "zod";
 import { compiledRequirementsSchema, eligibilityRequirementSchema, type CompiledRequirements, type EligibilityRequirement, type Opportunity } from "@/lib/contracts";
 import { compilationCacheKey, MemoryCache } from "@/lib/cache";
 import { ApiRequestError } from "@/lib/http";
-import { getAiConfig } from "@/lib/ai/config";
+import { getOpenAiCompatibleConfig } from "@/lib/ai/config";
 
 export const PROMPT_VERSION = "eligibility-extract-v1";
 /** Default fits Vercel's 60 s function limit; local Ollama can raise it with AI_TIMEOUT_MS (5–300 s). */
@@ -138,9 +138,9 @@ async function postChatCompletion(baseUrl: string, apiKey: string, body: Record<
 }
 
 async function requestModelContent(opportunity: Opportunity): Promise<{ content: string; model: string }> {
-  let config: ReturnType<typeof getAiConfig>;
+  let config: ReturnType<typeof getOpenAiCompatibleConfig>;
   try {
-    config = getAiConfig();
+    config = getOpenAiCompatibleConfig();
   } catch {
     throw new ApiRequestError("NOT_CONFIGURED", "AI eligibility checks are not configured on this deployment.");
   }
