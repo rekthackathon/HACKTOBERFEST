@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { getCompilationRateLimiter, getCompilationService } from "@/lib/ai/compilation";
+import { compileOpportunity } from "@/lib/ai/compile";
+import { getCompilationRateLimiter } from "@/lib/ai/compilation";
 import { evaluateEligibility } from "@/lib/eligibility";
 import { isSupabaseConfigured } from "@/lib/env/public";
 import { ApiRequestError, apiErrorResponse, readJsonBody, toErrorResponse } from "@/lib/http";
@@ -39,15 +40,9 @@ export async function POST(request: Request) {
 
     const startup = toStartupProfile(startupResult.data as StartupRow);
     const opportunity = toOpportunity(opportunityResult.data as OpportunityRow);
-    const compilationOutcome = await getCompilationService().compile(opportunity);
-    if (compilationOutcome.status === "failed") {
-      const response = apiErrorResponse(compilationOutcome.failure.code, compilationOutcome.failure.message);
-      if (compilationOutcome.failure.retryAfterSeconds !== undefined) {
-        response.headers.set("retry-after", String(compilationOutcome.failure.retryAfterSeconds));
-      }
-      return response;
-    }
-    const compilation = compilationOutcome.value;
+    // OpenAI-compatible compiler (AI_BASE_URL/AI_API_KEY/AI_MODEL), verified live against Ollama Cloud.
+    // getCompilationService() only supports loopback Ollama or Google Gemma, which fails on Vercel.
+    const compilation = await compileOpportunity(opportunity);
     const evaluation = evaluateEligibility(startup, compilation);
     return Response.json({ data: { evaluation, compilation } }, { headers: { "cache-control": "private, no-store" } });
   } catch (error) {
