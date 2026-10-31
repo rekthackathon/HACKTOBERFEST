@@ -4,13 +4,13 @@
 | --- | --- | --- |
 | Frontend | Auth/profile forms, real opportunity API, eligibility evidence UI | Loading/error/empty states; no fictional records presented as real |
 | Backend | Apply isolated migration, implement authenticated profile CRUD and read-only opportunity routes | Real two-user ownership tests; anonymous writes denied; forged owner input rejected |
-| AI | Verify Qwen checkpoint/license/provider, implement bounded source-to-JSON extraction and exact quote checks | Actual hosted inference; missing/unsupported evidence => needs review; provider failure tests |
+| AI | Verify the team-selected model checkpoint/license/provider, implement bounded source-to-JSON extraction and exact quote checks | Actual hosted inference; missing/unsupported evidence => needs review; provider failure tests |
 | DevOps lead | Authenticate GitHub, PR integration, Supabase/Vercel setup, hosted checks, release approval | CI passes; preview verified; main protected; explicit production approval |
 
 ## Submission acceptance
 
 - Public repository, MIT code license, setup guide and description.
-- Name exact Qwen checkpoint, weights link/revision/license and provider model ID.
+- Name exact selected model checkpoint, weights link/revision/license and provider model ID.
 - Show source text, extracted rule, source quote, deterministic evaluation and needs-review behavior.
 - Replace demo fixtures with sourced opportunities; preserve official application links and dates.
 - Demonstrate two independent users cannot modify each other's startup records.

@@ -2,11 +2,11 @@
 
 A professional discovery gateway for ASEAN founders, startups, investors, and ecosystem organisations. Built for Hacktoberfest Hack Day KL 2026, Problem Statement 2, Category B.
 
-The planned AI feature compiles programme requirements using a published **Qwen open-weight model**, validates the result with Zod, and evaluates supported rules deterministically. It must return potentially eligible, ineligible, or needs review with original evidence. A model's unsupported assumptions are never eligibility requirements. DigitalOcean is optional and is not required by this architecture.
+The planned AI feature compiles programme requirements using an **open-weight model to be selected**, validates the result with Zod, and evaluates supported rules deterministically. The model and inference provider are not confirmed; Qwen is only one possible option. It must return potentially eligible, ineligible, or needs review with original evidence. A model's unsupported assumptions are never eligibility requirements. DigitalOcean is optional and is not required by this architecture.
 
 ## Current scope
 
-This is the DevOps foundation, not the completed hackathon product. It includes a responsive fictional discovery preview, Next.js 16 / React / TypeScript, Tailwind v4 and a shadcn-compatible Button, Supabase SSR helpers, schema/RLS setup, shared contracts, conservative rule evaluation, mock fixtures, CI, and team agent instructions. Authentication forms, database CRUD routes, real opportunity ingestion, and hosted Qwen extraction are next-phase work. No live AI calls occur yet; AI integration is necessary before claiming a working open-weight AI submission.
+This is the DevOps foundation, not the completed hackathon product. It includes a responsive fictional discovery preview, Next.js 16 / React / TypeScript, Tailwind v4 and a shadcn-compatible Button, Supabase SSR helpers, schema/RLS setup, shared contracts, conservative rule evaluation, mock fixtures, CI, and team agent instructions. Authentication forms, database CRUD routes, real opportunity ingestion, and hosted model extraction are next-phase work. No live AI calls occur yet; AI integration is necessary before claiming a working open-weight AI submission.
 
 ## Local setup
 
@@ -45,7 +45,7 @@ tests/                   Contract, rule and configuration tests
 docs/                    API contracts, service setup, deployment and handoff
 ```
 
-Flow: official source → Qwen extraction (to implement) → Zod + evidence verification → deterministic evaluator → reviewed UI result. The evaluator does not execute model output. [Contracts and endpoint plan](docs/api-contracts.md) define integration boundaries.
+Flow: official source → model extraction (model selection and implementation pending) → Zod + evidence verification → deterministic evaluator → reviewed UI result. The evaluator does not execute model output. [Contracts and endpoint plan](docs/api-contracts.md) define integration boundaries.
 
 ## Team workflow
 
@@ -57,7 +57,7 @@ Use [the deployment runbook](docs/deployment.md). Vercel Git integration handles
 
 ## Open-weight AI qualification
 
-Select a specific published Qwen checkpoint whose model card/license permits the use, then record its weights URL, revision, license, inference provider, and provider model ID. Do not assume a hosted alias proves which weights run. An OpenAI-compatible API is an interface, not evidence that its model has published weights. The AI engineer must demonstrate actual source extraction through the selected model and include evidence-backed results and failure handling before submission. Model weights retain their own licenses; MIT covers this repository's original code.
+Select a specific published open-weight checkpoint whose model card/license permits the use, then record its weights URL, revision, license, inference provider, and provider model ID. Do not assume a hosted alias proves which weights run. An OpenAI-compatible API is an interface, not evidence that its model has published weights. The AI engineer must demonstrate actual source extraction through the selected model and include evidence-backed results and failure handling before submission. Model weights retain their own licenses; MIT covers this repository's original code.
 
 ## Submission
 

@@ -17,7 +17,7 @@
 ## Pending external verification
 
 - Apply migration and verify real Auth and cross-user RLS on isolated Supabase. No live database was modified.
-- Select and configure a licensed, published Qwen checkpoint/provider, implement extraction, and verify source evidence end to end. No inference occurred in this phase.
+- Select and configure a licensed, published open-weight checkpoint/provider, implement extraction, and verify source evidence end to end. No inference occurred in this phase.
 - Connect Vercel Git integration, set environment values, verify preview, and configure branch/release protections.
 - Run hosted CI after branch publication. Local validation is not a GitHub Actions run.
 - A PR against main requires an existing main commit; the inspected repository had none. Creating or pushing main requires the user's approval.

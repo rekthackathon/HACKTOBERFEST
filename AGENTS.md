@@ -31,5 +31,5 @@ Tests follow module ownership. Contract changes require lead review before depen
 
 Frontend: replace fictional fixtures with agreed APIs, implement auth/profile forms and loading/error/empty states.
 Backend: apply and test migration in an isolated Supabase project, build authenticated CRUD and read-only opportunity APIs.
-AI: select a published Qwen checkpoint and verify license/provider availability, implement bounded extraction with evidence verification, then integrate evaluator.
+AI: evaluate open-weight model options with the team; model and provider are not confirmed. Verify the selected checkpoint's license/provider availability, implement bounded extraction with evidence verification, then integrate evaluator.
 DevOps: run integration checks, connect Vercel previews, configure protected branches/release approval, prepare submission/demo.
