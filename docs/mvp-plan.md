@@ -58,8 +58,25 @@ Tests: mapping round-trip and the 401 path, using synthetic fixtures only.
 
 ## Step 2: Frontend (Frontend owner, `src/app/*` pages and `src/components/`)
 
-- `/auth`: email/password form using `createClient()` from `@/lib/supabase/client`, with `auth.signUp` and `auth.signInWithPassword`, plus a sign-out button. Session cookies are set by `@supabase/ssr`, so the route handlers above see the user automatically. No tokens in localStorage or URLs.
-- `/startups`: on load, `GET /api/startups/me` (404 means an empty form). The form fields match `startupProfileInputSchema`, and optional fields send `null`, not `""` or `0`. Save with `PUT /api/startups/me`. Show saved and error states. Reloading the page must show the saved values.
+The UI in `feature/frontend` commit `32844cb` (`auth-form.tsx`, `startup-profile-form.tsx`) is the starting point. Replace its `TODO (backend)` stubs; don't rebuild the forms.
+
+- `/auth` (`auth-form.tsx`): in `onSubmit`, call `createClient()` from `@/lib/supabase/client`, then `auth.signUp({ email, password })` or `auth.signInWithPassword(...)`. Show `error.message` on failure and redirect to `/startups` on success. Add a sign-out button (`auth.signOut()`). Session cookies are set by `@supabase/ssr`, so the route handlers above see the user automatically. No tokens in localStorage or URLs. Hide or remove "Forgot password" for the demo.
+- `/startups` (`startup-profile-form.tsx`): on load, `GET /api/startups/me`. A 404 means an empty form and a 401 means redirect to `/auth`. Save with `PUT /api/startups/me`. Show saved and error states. Reloading the page must show the saved values.
+- **The form fields must produce `startupProfileInputSchema`, because the evaluator reads these exact fields:**
+
+  | Contract field | Form change |
+  | --- | --- |
+  | `name` | keep `name` |
+  | `description` (required, max 4000) | use `about`; drop the 500 limit or keep it |
+  | `industry` (required, max 120) | make `sectors` a single choice, or send `sectors.join(", ")` |
+  | `country` | keep the names as labels, but send ISO codes `BN KH ID LA MY MM PH SG TH TL VN` |
+  | `stage` | options `idea`, `prototype`, `mvp`, `growth`, `scale` (labels can be friendly) |
+  | `fundingStage` | **new** select: `bootstrapped`, `pre_seed`, `seed`, `series_a`, `series_b_plus`, or "Not sure" which sends `null` |
+  | `companySize` | **new** number input (team size); empty sends `null` |
+  | `incorporationDate` | **new** date input (`YYYY-MM-DD`); empty sends `null` |
+  | `tagline`, `website`, `looking` | no database column; leave them out of the request for the MVP (the strict schema rejects unknown keys) |
+
+  Unknown values must be `null`, never `""` or `0`.
 - `/opportunities`: fetch `GET /api/opportunities`. Remove mock fixtures from the page. Show title, kind, countries, a description that states when the intake is closed, and the official link.
 - An eligibility button on each opportunity calls `POST /api/eligibility/evaluate` with `{ opportunityId }` and needs a signed-in user with a saved profile. Show:
   - the status badge (`potentially_eligible`, `ineligible`, or `needs_review`, labelled "Needs review")
@@ -90,9 +107,14 @@ Expected demo outcomes with the seeded data. Make sure the AI owner sees these. 
 - **Google SEA:** `needs_review` because the AI-product and team criteria are unsupported. Changing the profile's funding stage to `bootstrapped` gives `ineligible`.
 - **Cradle Spark/Sprint:** `needs_review` because age, revenue, and ownership are unsupported. A Singapore startup gives `ineligible` on the country rule.
 
-### Model and provider (decision pending, lead and AI owner)
+### Model: Gemma 4 (decided by the lead, 31 October 2026)
 
-Choose one open-weight checkpoint served through an OpenAI-compatible API that supports JSON output. Before setting `AI_MODEL`, the AI owner must verify the model is available at the provider and record the weights URL, revision, and license in the README. Candidates to verify, not yet confirmed: gpt-oss-120b or gpt-oss-20b (Apache-2.0), Qwen3 instruct models (Apache-2.0), Llama 3.3 70B Instruct (Llama 3.3 Community License).
+- **Model family:** Google DeepMind Gemma 4, open weights, **Apache 2.0** per the [model card](https://huggingface.co/google/gemma-4-31B-it). Sizes are E2B, E4B, 12B, 26B A4B (MoE) and 31B (dense).
+- **Recommended checkpoint:** `google/gemma-4-31B-it` (instruction-tuned, 256K context). It handles rule extraction best of the sizes. `google/gemma-4-26B-A4B-it` is the faster fallback.
+- **Provider (the AI owner confirms with one test call before wiring):** OpenRouter's OpenAI-compatible API. Set `AI_BASE_URL=https://openrouter.ai/api/v1` and `AI_MODEL=google/gemma-4-31b-it` ([listing](https://openrouter.ai/google/gemma-4-31b-it)). Avoid the `:free` variant for the demo, because its rate limits are shared. Google AI Studio's OpenAI-compatible endpoint is an alternative; check that it lists the Gemma 4 model before using it.
+- **Weights URL:** set `AI_MODEL_WEIGHTS_URL=https://huggingface.co/google/gemma-4-31B-it`. Record the Hugging Face revision hash and the provider model ID in the README.
+- **Gemma 4 notes:** it has configurable thinking modes and native system-prompt support. Parse only `choices[0].message.content` and ignore any reasoning fields. If the upstream provider rejects `response_format`, fall back to extracting the first JSON object from the content, then let Zod reject anything malformed.
+- An OpenAI-compatible endpoint is only an interface. The demo claim rests on the model card and the provider model ID above.
 
 ## Step 4: Integration checks (DevOps lead)
 
@@ -124,7 +146,8 @@ Choose one open-weight checkpoint served through an OpenAI-compatible API that s
 
 | Blocker | Owner | Next action |
 | --- | --- | --- |
-| Model and provider not chosen | Lead and AI | Decide now, set Vercel AI env vars, record weights and license |
+| Gemma 4 provider not confirmed | AI | One test call to `google/gemma-4-31b-it`, then set the AI env vars in Vercel and record the revision and provider ID |
+| Profile form fields don't match the contract | Frontend | Apply the field mapping in Step 2 |
 | Remote migration drift, schema/RLS unverified | Backend | Step 0.1–0.2 |
 | Seed data not applied | Backend | Step 0.3 |
 | Email confirmation and Site URL | Backend or lead | Step 0.4 |
