@@ -332,7 +332,7 @@ describe("AI compilation service", () => {
     const { value } = expectCompiled(await service.compile(opportunity));
     expect(value.completeness).toBe("partial");
     expect(value.requirements).toEqual([]);
-    expect(value.warnings.some((warning) => warning.includes("discarded"))).toBe(true);
+    expect(value.warnings.some((warning) => warning.includes("excluded") && warning.includes("Based in Thailand"))).toBe(true);
     // The verifier never invents or fabricates evidence.
     expect(records).toHaveLength(1);
   });
@@ -382,7 +382,7 @@ describe("AI compilation service", () => {
     const { value } = expectCompiled(await createCompilationService(deps).compile(cradle));
     expect(value.requirements).toEqual([]);
     expect(value.completeness).toBe("partial");
-    expect(value.warnings).toContainEqual(expect.stringContaining("not semantically relevant"));
+    expect(value.warnings).toContainEqual(expect.stringContaining("quote did not support that rule"));
   });
 
   it("keeps a Malaysia requirement with matching verbatim evidence", async () => {
@@ -561,7 +561,7 @@ describe("AI compilation service", () => {
     const { value } = expectCompiled(await service.compile(opportunity));
     expect(value.requirements).toEqual([]);
     expect(value.completeness).toBe("partial");
-    expect(value.warnings).toContainEqual(expect.stringContaining("discarded"));
+    expect(value.warnings).toContainEqual(expect.stringContaining("excluded"));
   });
 
   it("reports NOT_CONFIGURED when AI settings are absent and never calls the provider", async () => {

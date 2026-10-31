@@ -21,6 +21,7 @@ export type StartupRow = {
   has_ai_product?: string;
   has_full_time_cofounders?: string;
   has_dedicated_ai_engineers?: string;
+  individual_applicant_status?: string;
   created_at: string;
   updated_at: string;
 };
@@ -39,7 +40,7 @@ export type OpportunityRow = {
 };
 
 export const LEGACY_STARTUP_COLUMNS = "id, owner_id, name, description, industry, country, stage, incorporation_date, company_size, funding_stage, created_at, updated_at";
-export const STARTUP_COLUMNS = "id, owner_id, name, description, industry, country, stage, incorporation_date, company_size, funding_stage, accumulated_revenue_myr, malaysian_ownership_percent, malaysian_employee_percent, largest_external_entity_shareholding_percent, owns_required_ip_rights, application_participant_count, has_ai_product, has_full_time_cofounders, has_dedicated_ai_engineers, created_at, updated_at";
+export const STARTUP_COLUMNS = "id, owner_id, name, description, industry, country, stage, incorporation_date, company_size, funding_stage, accumulated_revenue_myr, malaysian_ownership_percent, malaysian_employee_percent, largest_external_entity_shareholding_percent, owns_required_ip_rights, application_participant_count, has_ai_product, has_full_time_cofounders, has_dedicated_ai_engineers, individual_applicant_status, created_at, updated_at";
 export const OPPORTUNITY_COLUMNS = "id, title, description, kind, countries, deadline, application_url, source_text, evidence, is_mock";
 
 /** Postgres returns offsets such as +00:00; the contracts require UTC "Z" timestamps. */
@@ -66,6 +67,7 @@ export function toStartupProfile(row: StartupRow): StartupProfile {
     hasAiProduct: row.has_ai_product ?? "unknown",
     hasFullTimeCofounders: row.has_full_time_cofounders ?? "unknown",
     hasDedicatedAiEngineers: row.has_dedicated_ai_engineers ?? "unknown",
+    individualApplicantStatus: row.individual_applicant_status ?? "unknown",
     createdAt: toUtc(row.created_at),
     updatedAt: toUtc(row.updated_at),
   });
@@ -104,6 +106,7 @@ export function toStartupWrite(input: StartupProfileInput) {
     has_ai_product: input.hasAiProduct,
     has_full_time_cofounders: input.hasFullTimeCofounders,
     has_dedicated_ai_engineers: input.hasDedicatedAiEngineers,
+    individual_applicant_status: input.individualApplicantStatus,
   };
 }
 
@@ -116,7 +119,8 @@ export function hasExtendedStartupEligibilityData(input: StartupProfileInput): b
     || input.applicationParticipantCount !== null
     || input.hasAiProduct !== "unknown"
     || input.hasFullTimeCofounders !== "unknown"
-    || input.hasDedicatedAiEngineers !== "unknown";
+    || input.hasDedicatedAiEngineers !== "unknown"
+    || input.individualApplicantStatus !== "unknown";
 }
 
 export function toOpportunity(row: OpportunityRow): Opportunity {

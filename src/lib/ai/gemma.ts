@@ -115,6 +115,7 @@ export function buildCompilationPrompt(opportunity: Opportunity, model: string):
     "- \"ai_product_required\": the source explicitly requires an AI product; do not infer from sector prose.",
     "- \"full_time_cofounders_required\": the source explicitly requires full-time cofounders.",
     "- \"dedicated_ai_engineers_required\": the source explicitly requires dedicated AI engineers.",
+    "- \"individual_applicant_residency\": an individual applicant must be Malaysian or reside in Malaysia; do not apply this condition to company applications.",
     "- \"unsupported\": reason explains why the condition cannot be represented.",
     "Every requirement also carries id (short unique identifier), description, and evidence",
     "(sourceUrl, quote, locator, retrievedAt).",

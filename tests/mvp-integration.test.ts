@@ -32,6 +32,7 @@ const startupRow: StartupRow = {
   has_ai_product: "unknown",
   has_full_time_cofounders: "unknown",
   has_dedicated_ai_engineers: "unknown",
+  individual_applicant_status: "unknown",
   created_at: "2026-10-31T05:00:00.123456+00:00",
   updated_at: "2026-10-31T05:00:00+00:00",
 };
@@ -81,6 +82,7 @@ describe("database mappers", () => {
       hasAiProduct: "unknown",
       hasFullTimeCofounders: "unknown",
       hasDedicatedAiEngineers: "unknown",
+      individualApplicantStatus: "unknown",
     });
     expect(isMissingStartupEligibilityColumnError({ code: "42703" })).toBe(true);
     expect(isMissingStartupEligibilityColumnError({ code: "PGRST204" })).toBe(true);
@@ -106,6 +108,7 @@ describe("database mappers", () => {
       hasAiProduct: "yes",
       hasFullTimeCofounders: "yes",
       hasDedicatedAiEngineers: "yes",
+      individualApplicantStatus: "eligible",
     });
     expect(write).not.toHaveProperty("owner_id");
     expect(write).toMatchObject({
@@ -120,6 +123,7 @@ describe("database mappers", () => {
       has_ai_product: "yes",
       has_full_time_cofounders: "yes",
       has_dedicated_ai_engineers: "yes",
+      individual_applicant_status: "eligible",
     });
     expect(hasExtendedStartupEligibilityData({
       name: "A", description: "B", industry: "C", country: "SG", stage: "idea",
@@ -127,6 +131,7 @@ describe("database mappers", () => {
       accumulatedRevenueMyr: null, malaysianOwnershipPercent: null, malaysianEmployeePercent: null,
       largestExternalEntityShareholdingPercent: null, ownsRequiredIpRights: "unknown", applicationParticipantCount: null,
       hasAiProduct: "unknown", hasFullTimeCofounders: "unknown", hasDedicatedAiEngineers: "unknown",
+      individualApplicantStatus: "unknown",
     })).toBe(false);
     expect(hasExtendedStartupEligibilityData({
       name: "A", description: "B", industry: "C", country: "SG", stage: "idea",
@@ -134,6 +139,7 @@ describe("database mappers", () => {
       accumulatedRevenueMyr: 1, malaysianOwnershipPercent: null, malaysianEmployeePercent: null,
       largestExternalEntityShareholdingPercent: null, ownsRequiredIpRights: "unknown", applicationParticipantCount: null,
       hasAiProduct: "unknown", hasFullTimeCofounders: "unknown", hasDedicatedAiEngineers: "unknown",
+      individualApplicantStatus: "unknown",
     })).toBe(true);
     expect(toLegacyStartupWrite({
       name: "A", description: "B", industry: "C", country: "SG", stage: "idea",
@@ -141,6 +147,7 @@ describe("database mappers", () => {
       accumulatedRevenueMyr: 1, malaysianOwnershipPercent: 60, malaysianEmployeePercent: 75,
       largestExternalEntityShareholdingPercent: 20, ownsRequiredIpRights: "yes", applicationParticipantCount: 3,
       hasAiProduct: "yes", hasFullTimeCofounders: "yes", hasDedicatedAiEngineers: "yes",
+      individualApplicantStatus: "eligible",
     })).not.toHaveProperty("accumulated_revenue_myr");
   });
 });
@@ -173,7 +180,7 @@ describe("compilation verification", () => {
     }, "test-model");
     expect(compilation.requirements).toHaveLength(1);
     expect(compilation.completeness).toBe("partial");
-    expect(compilation.warnings[0]).toMatch(/discarded/);
+    expect(compilation.warnings[0]).toMatch(/excluded/);
     expect(evaluateEligibility(startup, compilation).status).toBe("needs_review");
   });
 
